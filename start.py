@@ -20,6 +20,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from dataclasses import dataclass, field
 from pathlib import Path
+BASE_DIR = Path(__file__).resolve().parent
 from abc import ABC, abstractmethod
 from typing import Dict, Tuple, List
 from tqdm.notebook import tqdm
@@ -74,37 +75,37 @@ class ExperimentConfig:
 	# Burada deneyler için kullanılacak tüm veri setlerini tanımlıyoruz.
 	datasets: Dict[str, DatasetConfig] = field(default_factory=lambda: {
 		"water_quality": DatasetConfig(
-			path="/kaggle/input/water-potability/water_potability.csv",
-			task_type="regression",
-			target_column="Chloramines"
+			path=str(BASE_DIR / "datasets" / "water_potability.csv"),
+			task_type="classification",
+			target_column="Potability"
 		),
 		"smart_grid": DatasetConfig(
-			path="/kaggle/input/smart-grid-stability/smart_grid_stability_augmented.csv",
+			path=str(BASE_DIR / "datasets" / "smart_grid_stability_augmented.csv"),
 			task_type="regression",
 			target_column="p1"
 		),
         "traffic": DatasetConfig(
-            path="/kaggle/input/istanbul-traffic-index/traffic_index.csv",
+            path=str(BASE_DIR / "datasets" / "traffic_index.csv"),
             task_type="regression",
             target_column="average_traffic_index"
         ),
         "solar_power": DatasetConfig(
-            path="/kaggle/input/solar-power-generation-data/Plant_1_Generation_Data.csv",
+            path=str(BASE_DIR / "datasets" / "Plant_1_Generation_Data.csv"),
             task_type="regression",
             target_column="TOTAL_YIELD"
         ),
         "wind_power": DatasetConfig(
-            path="/kaggle/input/wind-power-generation/50Hertz.csv",
+            path=str(BASE_DIR / "datasets" / "50Hertz.csv"),
             task_type="regression",
             target_column="01:00:00"
         ),
         "water_quality_monitoring": DatasetConfig(
-            path="/kaggle/input/water-quality-monitoring-dataset/brisbane_water_quality.csv",
+            path=str(BASE_DIR / "datasets" / "brisbane_water_quality.csv"),
             task_type="regression",
             target_column="Average Water Speed"
         ),
         "traffic2": DatasetConfig(
-            path="/kaggle/input/traffic-flow-forecasting-dataset/tra_Y_te.csv",
+            path=str(BASE_DIR / "datasets" / "tra_Y_te.csv"),
             task_type="regression",
             target_column="Var1"
         )
@@ -589,6 +590,9 @@ class DSPOAttack(Attack):
         
         # Sadece seçilen noktalara pertürbasyonları uygula
         poisoned_df.loc[self.original_indices_to_poison, self.target_col] += final_deltas[self.poison_locations]
+        if self.task_type == 'classification':
+        # EĞER GÖREV SINIFLANDIRMA İSE, YUVARLA VE TAMSAYIYA ÇEVİR.
+            poisoned_df[self.target_col] = poisoned_df[self.target_col].round().astype(int)
         
         # Mevcut çerçeveye uyum için poison_indices'i set et
         self.poison_indices = self.original_indices_to_poison
@@ -858,7 +862,7 @@ def run_single_experiment(dataset_name: str):
 # ## 11. Execute the Framework
 # ---
 if __name__ == '__main__':
-	run_single_experiment("traffic2")
+	run_single_experiment("water_quality")
 
 
 
