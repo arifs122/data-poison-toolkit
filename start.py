@@ -70,7 +70,7 @@ class DSPOConfig:
 @dataclass
 class ExperimentConfig:
 	random_seed: int = 42
-	results_dir: Path = Path("./results_usenix_submission")
+	results_dir: Path = Path(BASE_DIR /"results")
 	
 	# Burada deneyler için kullanılacak tüm veri setlerini tanımlıyoruz.
 	datasets: Dict[str, DatasetConfig] = field(default_factory=lambda: {
@@ -103,12 +103,8 @@ class ExperimentConfig:
             path=str(BASE_DIR / "datasets" / "brisbane_water_quality.csv"),
             task_type="regression",
             target_column="Average Water Speed"
-        ),
-        "traffic2": DatasetConfig(
-            path=str(BASE_DIR / "datasets" / "tra_Y_te.csv"),
-            task_type="regression",
-            target_column="Var1"
         )
+        
 	})
 
 	attacks: Dict[str, BaseAttackConfig] = field(default_factory=lambda: {
@@ -134,32 +130,6 @@ def load_water_quality_dataset(csv_path: str) -> pd.DataFrame:
 			else:
 				df[col] = df[col].fillna(df[col].mode()[0])
 	return df
-
-def load_traffic_flow_dataset(csv_path: str) -> pd.DataFrame:
-    """
-    Traffic Flow Forecasting veri setini belirtilen yoldan yükler ve ön işler.
-
-    """
-    # 1. CSV dosyasını pandas DataFrame olarak oku
-    df = pd.read_csv(csv_path)
-
-    # 2. Eksik değerleri (NaN) doldurma işlemi
-    print("Eksik değerler kontrol ediliyor ve dolduruluyor...")
-    for col in df.columns:
-        # Eğer sütunda en az bir eksik değer varsa
-        if df[col].isnull().any():
-            print(f"'{col}' sütununda eksik değerler bulundu. Dolduruluyor...")
-            # Sütunun veri tipi sayısal ise (float64 veya int64)
-            if df[col].dtype in ['float64', 'int64']:
-                # Eksik değerleri sütunun ortalaması ile doldur
-                df[col] = df[col].fillna(df[col].mean())
-            # Sütunun veri tipi kategorik/metin ise
-            else:
-                # Eksik değerleri sütunun en sık tekrar eden değeri (mod) ile doldur
-                df[col] = df[col].fillna(df[col].mode()[0])
-    
-    print("Veri seti başarıyla yüklendi ve temizlendi.")
-    return df
 
 def load_smart_grid_dataset(csv_path: str) -> pd.DataFrame:
 	df = pd.read_csv(csv_path)
@@ -188,11 +158,12 @@ def load_smart_grid_dataset(csv_path: str) -> pd.DataFrame:
 
 def load_traffic_dataset(csv_path: str) -> pd.DataFrame:
     df = pd.read_csv(csv_path)
-    # 'trafficindexdate' sütununu datetime'a çevirip index yapma
     df['trafficindexdate'] = pd.to_datetime(df['trafficindexdate'])
     df = df.sort_values('trafficindexdate').set_index('trafficindexdate')
     
-    # Sayısal sütunlardaki eksik değerleri ortalama ile doldurma
+    if 'trafficindex' in df.columns:
+        df.rename(columns={'trafficindex': 'average_traffic_index'}, inplace=True)
+    
     for col in df.columns:
         if df[col].isnull().any() and df[col].dtype in ['float64', 'int64']:
             df[col] = df[col].fillna(df[col].mean())
@@ -248,7 +219,6 @@ DATASET_LOADERS = {
     "solar_power": load_solar_power_dataset,
     "wind_power": load_wind_power_dataset,
     "water_quality_monitoring": load_water_quality_monitoring_dataset,
-    "traffic2" : load_traffic_flow_dataset,
 }
 
 # ---
@@ -723,43 +693,160 @@ def evaluate_defense_performance(all_indices: pd.Index, poison_indices: pd.Index
 # Sonuçları CSV, LaTeX ve grafik olarak kaydetme.
 # ---
 
-def save_results(df_results: pd.DataFrame, results_dir: Path):
-	df_results.to_csv(results_dir / "benchmark_results.csv", index=False)
-	
-	# LaTeX formatında özet tablo
-	summary = df_results.groupby('attack')[['mae_degradation', 'recall', 'f1_score']].mean().reset_index()
-	summary.columns = ['Attack', 'MAE Degradation', 'Avg. Recall', 'Avg. F1-Score']
-	with open(results_dir / "summary_table.tex", "w") as f:
-		f.write(summary.to_latex(index=False, float_format="%.3f"))
+def save_results(df_results: pd.DataFrame, results_dir: Path, dataset_name: str, config: ExperimentConfig):
+    # Results klasörünü oluştur
+    results_dir.mkdir(exist_ok=True)
+    
+    # Parametre bilgilerini al
+    budget_pct = list(config.attacks.values())[0].budget_pct
+    perturb_strength = list(config.attacks.values())[0].perturb_strength
+    
+    # Zaman damgası ekle (üstüne yazma sorunu için)
+    from datetime import datetime
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    
+    # Dosya isimleri için prefix oluştur
+    file_prefix = f"{dataset_name}_budget{budget_pct:.3f}_perturb{perturb_strength:.2f}_{timestamp}"
+    
+    # DataFrame'e parametre bilgilerini ekle
+    df_results['dataset_name'] = dataset_name
+    df_results['budget_percent'] = budget_pct
+    df_results['perturb_strength'] = perturb_strength
+    df_results['timestamp'] = timestamp
+    
+    # Tüm sonuçları CSV'ye kaydet
+    csv_path = results_dir / f"{file_prefix}_results.csv"
+    df_results.to_csv(csv_path, index=False)
+    
+    # Impact metric sütununu belirle (task türüne göre)
+    impact_column = None
+    if 'impact_score' in df_results.columns:
+        impact_column = 'impact_score'
+    elif 'mae_degradation' in df_results.columns:
+        impact_column = 'mae_degradation'
+    else:
+        print("Uyarı: Impact metriği bulunamadı. Özet tablo oluşturulamıyor.")
+        return file_prefix
+    
+    # Özet tabloyu oluştur
+    summary_columns = [impact_column, 'recall', 'f1_score']
+    available_columns = [col for col in summary_columns if col in df_results.columns]
+    
+    if len(available_columns) < 2:
+        print("Uyarı: Yeterli metrik bulunamadı. Özet tablo oluşturulamıyor.")
+        return file_prefix
+    
+    summary = df_results.groupby('attack')[available_columns].mean().reset_index()
+    
+    # Özet tablosuna parametre bilgilerini ekle
+    summary_with_params = pd.DataFrame({
+        'Dataset': [dataset_name] * len(summary),
+        'Budget (%)': [f"{budget_pct:.1%}"] * len(summary),
+        'Perturb Strength': [perturb_strength] * len(summary),
+        'Timestamp': [timestamp] * len(summary)
+    })
+    
+    # Sütun isimlerini güzelleştir
+    column_names = ['Attack']
+    for col in available_columns:
+        if col == 'impact_score':
+            column_names.append('Impact Score')
+        elif col == 'mae_degradation':
+            column_names.append('MAE Degradation')
+        elif col == 'recall':
+            column_names.append('Avg. Recall')
+        elif col == 'f1_score':
+            column_names.append('Avg. F1-Score')
+        else:
+            column_names.append(col.title())
+    
+    summary.columns = column_names
+    
+    # Parametre bilgileri ile birlikte birleştir
+    final_summary = pd.concat([summary_with_params, summary.iloc[:, 1:]], axis=1)
+    
+    # LaTeX tablosunu kaydet
+    latex_path = results_dir / f"{file_prefix}_summary.tex"
+    with open(latex_path, "w") as f:
+        f.write(final_summary.to_latex(index=False, float_format="%.3f"))
+    
+    print(f"\n{'='*50}")
+    print(f"SONUÇLAR KAYDEDİLDİ")
+    print(f"{'='*50}")
+    print(f"Dataset: {dataset_name}")
+    print(f"Budget: {budget_pct:.1%}")
+    print(f"Perturb Strength: {perturb_strength}")
+    print(f"CSV: {csv_path}")
+    print(f"LaTeX: {latex_path}")
+    print(f"{'='*50}")
+    print("ÖZET:")
+    print(final_summary.to_string(index=False))
+    
+    return file_prefix
 
-def plot_results(df_results: pd.DataFrame, results_dir: Path):
-	# Ana Grafik: Etki vs. Gizlilik (Best Paper için en önemli grafik)
-	plt.figure(figsize=(10, 8))
-	
-	# Gizlilik = 1 - Recall (Savunmadan ne kadar iyi kaçtığı)
-	df_results['evasion'] = 1 - df_results['recall']
-	
-	plot = sns.scatterplot(
-		data=df_results,
-		x='evasion',
-		y='mae_degradation',
-		hue='attack',
-		style='defense',
-		s=150,
-		alpha=0.8
-	)
-	
-	plt.title('Attack Impact vs. Stealth (Defense Evasion)', fontsize=16, weight='bold')
-	plt.xlabel('Defense Evasion (1 - Recall)', fontsize=12)
-	plt.ylabel('Attack Impact (MAE Degradation)', fontsize=12)
-	plt.legend(title='Attack & Defense', bbox_to_anchor=(1.05, 1), loc='upper left')
-	plt.grid(True, which='both', linestyle='--', linewidth=0.5)
-	plt.tight_layout()
-	
-	fig_path = results_dir / "impact_vs_stealth.png"
-	plt.savefig(fig_path, dpi=300)
-	print(f"Key plot saved to {fig_path}")
-	plt.show()
+def plot_results(df_results: pd.DataFrame, results_dir: Path, dataset_name: str, config: ExperimentConfig, file_prefix: str):
+    """
+    Saldırı etkisini (impact score) savunma kaçışı (evasion) ile karşılaştıran bir
+    dağılım grafiği (scatterplot) oluşturur ve kaydeder.
+    """
+    # Results klasörünü oluştur
+    results_dir.mkdir(exist_ok=True)
+    
+    # Parametre bilgilerini al
+    budget_pct = list(config.attacks.values())[0].budget_pct
+    perturb_strength = list(config.attacks.values())[0].perturb_strength
+    
+    # Impact metriğini belirle
+    impact_column = None
+    if 'impact_score' in df_results.columns:
+        impact_column = 'impact_score'
+        impact_label = 'Attack Impact (Impact Score)'
+    elif 'mae_degradation' in df_results.columns:
+        impact_column = 'mae_degradation'
+        impact_label = 'Attack Impact (MAE Degradation)'
+    else:
+        print("Uyarı: Impact metriği bulunamadı. Grafik oluşturulamıyor.")
+        return
+    
+    if 'recall' not in df_results.columns:
+        print("Uyarı: Recall metriği bulunamadı. Grafik oluşturulamıyor.")
+        return
+    
+    plt.figure(figsize=(12, 8))
+    df_results['evasion'] = 1 - df_results['recall']
+    
+    plot = sns.scatterplot(
+        data=df_results,
+        x='evasion',
+        y=impact_column,
+        hue='attack',
+        style='defense',
+        s=150,
+        alpha=0.8
+    )
+    
+    # Başlık ve alt başlık parametre bilgileri ile
+    main_title = f'Attack Impact vs. Stealth (Defense Evasion)\nDataset: {dataset_name.upper()}'
+    subtitle = f'Budget: {budget_pct:.1%} | Perturb Strength: {perturb_strength} | Defenses: {len(df_results["defense"].unique())}'
+    
+    plt.suptitle(main_title, fontsize=16, weight='bold', y=0.95)
+    plt.title(subtitle, fontsize=11, style='italic', pad=20)
+    
+    plt.xlabel('Defense Evasion (1 - Recall)', fontsize=12)
+    plt.ylabel(impact_label, fontsize=12)
+    
+    # Legend'ı düzenle
+    plt.legend(title='Attack & Defense', bbox_to_anchor=(1.05, 1), loc='upper left')
+    
+    plt.grid(True, which='both', linestyle='--', linewidth=0.5, alpha=0.7)
+    plt.tight_layout()
+    
+    # Grafik dosyasını kaydet
+    fig_path = results_dir / f"{file_prefix}_plot.png"
+    plt.savefig(fig_path, dpi=300, bbox_inches='tight')
+    
+    print(f"Grafik kaydedildi: {fig_path}")
+    plt.show()
 
 # ---
 # ## 10. Main Experiment Orchestrator
@@ -850,19 +937,22 @@ def run_single_experiment(dataset_name: str):
             all_results.append(result_entry)
             
     df_results = pd.DataFrame(all_results)
+
+    file_prefix = save_results(df_results, cfg.results_dir, dataset_name, cfg)
+    plot_results(df_results, cfg.results_dir, dataset_name, cfg, file_prefix)
+
     print("\n" + "="*50)
     print(f" FINAL RESULTS FOR '{dataset_name.upper()}'")
     print("="*50)
     print(df_results.to_string())
     
-    # df_results.to_csv(cfg.results_dir / f"{dataset_name}_results.csv", index=False)
-    # print(f"\n✅ Deney tamamlandı. Sonuçlar '{cfg.results_dir}' klasörüne kaydedildi.")
+    print(f"\n✅ Deney tamamlandı. Sonuçlar '{cfg.results_dir}' klasörüne kaydedildi.")
 
 # ---
 # ## 11. Execute the Framework
 # ---
 if __name__ == '__main__':
-	run_single_experiment("water_quality")
+	run_single_experiment("traffic")
 
 
 
