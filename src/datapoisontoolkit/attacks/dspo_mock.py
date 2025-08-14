@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import torch
-from typing import Dict, Tuple, List
+from typing import Dict
 from dataclasses import dataclass
 from datapoisontoolkit.attacks import base_attack
 from tqdm.notebook import tqdm
