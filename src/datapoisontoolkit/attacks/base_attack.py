@@ -1,9 +1,11 @@
-import numpy as np
 import pandas as pd
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datapoisontoolkit.attacks import dspo_mock
 from datapoisontoolkit.attacks import greedy_residue_mock
+from datapoisontoolkit.detectors import base_defense
+from typing import Dict
 
 @dataclass
 class BaseAttackConfig:
@@ -29,8 +31,8 @@ class Attack(ABC):
         diff = (poisoned_features != clean_features).any(axis=1)
         return self.df.index[diff]
     
-def get_attack(name: str, cfg: BaseAttackConfig, df: pd.DataFrame, target_col: str, task_type: str, defenses: Dict[str, Defense]) -> Attack:
-    if name == "random": return RandomAttack(cfg, df, target_col, task_type)
+def get_attack(name: str, cfg: BaseAttackConfig, df: pd.DataFrame, target_col: str, task_type: str, defenses: Dict[str, base_defense.Defense]) -> Attack:
+    #if name == "random": return RandomAttack(cfg, df, target_col, task_type) #synthetic?
     if name == "greedy_residue": return greedy_residue_mock.GreedyResidueAttack(cfg, df, target_col, task_type)
     if name == "dspo" : return dspo_mock.DSPOAttack(cfg, df, target_col, task_type, defenses)
     raise ValueError(f"Unknown attack: {name}")
