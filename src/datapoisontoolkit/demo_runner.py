@@ -12,6 +12,7 @@ from sklearn.preprocessing import StandardScaler
 from datapoisontoolkit.detectors import stat_detectors
 from datapoisontoolkit.attacks import base_attack
 from datapoisontoolkit.detectors import model_detectors
+from datapoisontoolkit.attacks import dspo_mock
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -25,14 +26,6 @@ class DatasetConfig:
     path: str
     task_type: str # 'classification' or 'regression'
     target_column: str
-
-@dataclass
-class DSPOConfig:
-    num_iterations: int = 100
-    learning_rate: float = 0.01
-    budget_pct: float = 0.03
-    perturb_strength: float = 0.5
-    lambda_defense: float = 1.0
 
 @dataclass
 class ExperimentConfig:
@@ -77,7 +70,7 @@ class ExperimentConfig:
 	attacks: Dict[str, base_attack.BaseAttackConfig] = field(default_factory=lambda: {
 		"random": base_attack.BaseAttackConfig(),
 		"greedy_residue": base_attack.BaseAttackConfig(),
-        "dspo": DSPOConfig(),
+        "dspo": dspo_mock.DSPOConfig(),
 	})
 
 	active_defenses: List[str] = field(default_factory=lambda: ["lof", "pca", "kde", "forest", "median", "quantile", "dbscan"])
