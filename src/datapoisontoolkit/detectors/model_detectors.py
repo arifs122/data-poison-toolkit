@@ -127,6 +127,12 @@ class IsolationForestDefense(base_defense.Defense):
         scores = pd.Series(-preds, index=series.index)
         return scores
 
+    def get_differentiable_proxy(self) -> base_defense.DifferentiableDefense:
+        class NoOpProxy(base_defense.DifferentiableDefense):
+            def __call__(self, x: torch.Tensor) -> torch.Tensor:
+                return torch.zeros(x.shape[0], device=x.device)
+        return NoOpProxy()
+
 class MedianFilterDefense(base_defense.Defense):
 	def __init__(self, window=7):
 		self.window = window
@@ -136,7 +142,7 @@ class MedianFilterDefense(base_defense.Defense):
 		error = np.abs(series - median)
 		return pd.Series(error, index=series.index)
 
-	def get_differentiable_proxy(self):
+	def get_differentiable_proxy(self) -> base_defense.DifferentiableDefense:
 		class NoOpProxy(base_defense.DifferentiableDefense):
 			def __call__(self, x: torch.Tensor) -> torch.Tensor:
 				return torch.zeros(x.shape[0], device=x.device)
@@ -153,7 +159,7 @@ class QuantileDefense(base_defense.Defense):
 		mask = (series < lq) | (series > uq)
 		return pd.Series(mask.astype(int), index=series.index)
 
-	def get_differentiable_proxy(self):
+	def get_differentiable_proxy(self) -> base_defense.DifferentiableDefense:
 		class NoOpProxy(base_defense.DifferentiableDefense):
 			def __call__(self, x: torch.Tensor) -> torch.Tensor:
 				return torch.zeros(x.shape[0], device=x.device)
@@ -167,7 +173,7 @@ class DBSCANDefense(base_defense.Defense):
 		# Label -1: outlier
 		scores = (labels == -1).astype(int)
 		return pd.Series(scores, index=series.index)
-	def get_differentiable_proxy(self):
+	def get_differentiable_proxy(self) -> base_defense.DifferentiableDefense:
 		class NoOpProxy(base_defense.DifferentiableDefense):
 			def __call__(self, x: torch.Tensor) -> torch.Tensor:
 				return torch.zeros(x.shape[0], device=x.device)

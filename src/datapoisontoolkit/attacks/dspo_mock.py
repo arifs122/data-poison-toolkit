@@ -4,7 +4,7 @@ import torch
 from typing import Dict
 from dataclasses import dataclass
 from datapoisontoolkit.attacks import base_attack
-from tqdm.notebook import tqdm
+from tqdm import tqdm
 from datapoisontoolkit.detectors import base_defense
 
 @dataclass

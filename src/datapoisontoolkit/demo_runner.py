@@ -15,6 +15,8 @@ from datapoisontoolkit.detectors import model_detectors
 from datapoisontoolkit.attacks import dspo_mock
 
 BASE_DIR = Path(__file__).resolve().parent
+print(f"BASE_DIR: {BASE_DIR}")
+print(f"BASE_DIR.parent: {BASE_DIR.parent}")
 
 # Styling for plots
 sns.set_theme(style="whitegrid", palette="muted")
@@ -30,37 +32,37 @@ class DatasetConfig:
 @dataclass
 class ExperimentConfig:
 	random_seed: int = 42
-	results_dir: Path = Path(BASE_DIR /"results")
+	results_dir: Path = Path(BASE_DIR.parent.parent /"results")
 	
 	# Burada deneyler için kullanılacak tüm veri setlerini tanımlıyoruz.
 	datasets: Dict[str, DatasetConfig] = field(default_factory=lambda: {
 		"water_quality": DatasetConfig(
-			path=str(BASE_DIR / "datasets" / "water_potability.csv"),
+			path=str(BASE_DIR.parent / "data" / "water_potability.csv"),
 			task_type="classification",
 			target_column="Potability"
 		),
 		"smart_grid": DatasetConfig(
-			path=str(BASE_DIR / "datasets" / "smart_grid_stability_augmented.csv"),
+			path=str(BASE_DIR.parent / "data" / "smart_grid_stability_augmented.csv"),
 			task_type="regression",
 			target_column="p1"
 		),
         "traffic": DatasetConfig(
-            path=str(BASE_DIR / "datasets" / "traffic_index.csv"),
+            path=str(BASE_DIR.parent / "data" / "traffic_index.csv"),
             task_type="regression",
             target_column="average_traffic_index"
         ),
         "solar_power": DatasetConfig(
-            path=str(BASE_DIR / "datasets" / "Plant_1_Generation_Data.csv"),
+            path=str(BASE_DIR.parent / "data" / "Plant_1_Generation_Data.csv"),
             task_type="regression",
             target_column="TOTAL_YIELD"
         ),
         "wind_power": DatasetConfig(
-            path=str(BASE_DIR / "datasets" / "50Hertz.csv"),
+            path=str(BASE_DIR.parent / "data" / "50Hertz.csv"),
             task_type="regression",
             target_column="01:00:00"
         ),
         "water_quality_monitoring": DatasetConfig(
-            path=str(BASE_DIR / "datasets" / "brisbane_water_quality.csv"),
+            path=str(BASE_DIR.parent / "data" / "brisbane_water_quality.csv"),
             task_type="regression",
             target_column="Average Water Speed"
         )
@@ -391,7 +393,7 @@ def run_single_experiment(dataset_name: str):
         for defense_name, defense_instance in defenses.items():
             print(f"  - Savunmaya karşı test: {defense_name}")
             
-            defense_target_column = 'ph' if dataset_name == 'water_quality' else dataset_cfg.target_column
+            defense_target_column = dataset_cfg.target_column
             
             if defense_target_column not in df_poisoned.columns:
                 print(f"    - Uyarı: '{defense_target_column}' bulunamadı. Savunma atlanıyor.")

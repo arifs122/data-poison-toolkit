@@ -2,8 +2,6 @@ import pandas as pd
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datapoisontoolkit.attacks import dspo_mock
-from datapoisontoolkit.attacks import greedy_residue_mock
 from datapoisontoolkit.detectors import base_defense
 from typing import Dict
 
@@ -32,7 +30,49 @@ class Attack(ABC):
         return self.df.index[diff]
     
 def get_attack(name: str, cfg: BaseAttackConfig, df: pd.DataFrame, target_col: str, task_type: str, defenses: Dict[str, base_defense.Defense]) -> Attack:
-    #if name == "random": return RandomAttack(cfg, df, target_col, task_type) #synthetic?
-    if name == "greedy_residue": return greedy_residue_mock.GreedyResidueAttack(cfg, df, target_col, task_type)
-    if name == "dspo" : return dspo_mock.DSPOAttack(cfg, df, target_col, task_type, defenses)
-    raise ValueError(f"Unknown attack: {name}")
+    if name == "random": 
+        return RandomAttack(cfg, df, target_col, task_type)
+    elif name == "greedy_residue":
+        from datapoisontoolkit.attacks import greedy_residue_mock
+        return greedy_residue_mock.GreedyResidueAttack(cfg, df, target_col, task_type)
+    elif name == "dspo":
+        from datapoisontoolkit.attacks import dspo_mock
+        return dspo_mock.DSPOAttack(cfg, df, target_col, task_type, defenses)
+    else:
+        raise ValueError(f"Unknown attack: {name}")
+
+import numpy as np
+
+class RandomAttack(Attack):
+    def craft(self, model) -> pd.DataFrame:
+        budget = int(self.config.budget_pct * len(self.df))
+        poisoned_df = self.df.copy()
+        
+        # Rastgele indeksler seç
+        self.poison_indices = np.random.choice(self.df.index, budget, replace=False)
+        
+        if self.task_type == 'classification':
+            # Sınıf etiketlerini değiştir
+            poisoned_df.loc[self.poison_indices, self.target_col] = 1 - poisoned_df.loc[self.poison_indices, self.target_col]
+            
+            # Özelliklere rastgele gürültü ekle
+            numeric_cols = poisoned_df.select_dtypes(include=np.number).columns.drop(self.target_col, errors='ignore')
+            for col in numeric_cols:
+                sigma = self.df[col].std()
+                deltas = np.random.uniform(
+                    -self.config.perturb_strength * sigma,
+                    self.config.perturb_strength * sigma,
+                    size=len(self.poison_indices)
+                )
+                poisoned_df.loc[self.poison_indices, col] += deltas
+                
+        elif self.task_type == 'regression':
+            # Hedef değişkene rastgele gürültü ekle
+            perturbations = np.random.uniform(
+                -self.config.perturb_strength * self.df[self.target_col].std(),
+                self.config.perturb_strength * self.df[self.target_col].std(),
+                size=budget
+            )
+            poisoned_df.loc[self.poison_indices, self.target_col] += perturbations
+            
+        return poisoned_df
