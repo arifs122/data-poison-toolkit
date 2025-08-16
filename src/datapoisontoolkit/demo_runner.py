@@ -12,11 +12,8 @@ from sklearn.preprocessing import StandardScaler
 from datapoisontoolkit.detectors import stat_detectors
 from datapoisontoolkit.attacks import base_attack
 from datapoisontoolkit.detectors import model_detectors
-from datapoisontoolkit.attacks import dspo_mock
 
 BASE_DIR = Path(__file__).resolve().parent
-print(f"BASE_DIR: {BASE_DIR}")
-print(f"BASE_DIR.parent: {BASE_DIR.parent}")
 
 # Styling for plots
 sns.set_theme(style="whitegrid", palette="muted")
@@ -72,7 +69,7 @@ class ExperimentConfig:
 	attacks: Dict[str, base_attack.BaseAttackConfig] = field(default_factory=lambda: {
 		"random": base_attack.BaseAttackConfig(),
 		"greedy_residue": base_attack.BaseAttackConfig(),
-        "dspo": dspo_mock.DSPOConfig(),
+        "dspo": base_attack.DSPOConfig(),
 	})
 
 	active_defenses: List[str] = field(default_factory=lambda: ["lof", "pca", "kde", "forest", "median", "quantile", "dbscan"])
@@ -431,10 +428,7 @@ def run_single_experiment(dataset_name: str):
     print("="*50)
     print(df_results.to_string())
     
-    print(f"\n✅ Deney tamamlandı. Sonuçlar '{cfg.results_dir}' klasörüne kaydedildi.")
+    print(f"\n[OK] Deney tamamlandi. Sonuclar '{cfg.results_dir}' klasorune kaydedildi.")
 
-# ---
-# ## 11. Execute the Framework
-# ---
 if __name__ == '__main__':
 	run_single_experiment("traffic")

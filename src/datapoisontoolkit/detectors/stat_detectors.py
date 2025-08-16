@@ -9,11 +9,6 @@ from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
 from sklearn.preprocessing import StandardScaler
 
 
-# ---
-# ## 8. Evaluation Module
-# Saldırıların etkisini ve gizliliğini ölçmek için kapsamlı metrikler.
-# ---
-
 def evaluate_stealth(clean_series: pd.Series, poison_series: pd.Series) -> dict:
     """Saldırının gizliliğini, istatistiksel dağılımları karşılaştırarak tek bir puanla ölçer."""
     if clean_series.dtype not in ['float64', 'int64']:
