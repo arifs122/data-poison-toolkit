@@ -4,6 +4,10 @@ from dataclasses import dataclass
 from datapoisontoolkit.attacks import base_attack
 
 class GreedyResidueAttack(base_attack.Attack):
+    """
+    Greedy attack that targets points with highest residues/errors.
+    """
+    
     def craft(self, model) -> pd.DataFrame:
         budget = int(self.config.budget_pct * len(self.df))
         poisoned_df = self.df.copy()
@@ -21,7 +25,10 @@ class GreedyResidueAttack(base_attack.Attack):
 
             poisoned_df.loc[self.poison_indices, self.target_col] = 1 - poisoned_df.loc[self.poison_indices, self.target_col]
             
-            numeric_cols = poisoned_df.select_dtypes(include=np.number).columns.drop(self.target_col, errors='ignore')
+            # SADECE SAYISAL SÜTUNLARI AL
+            numeric_cols = poisoned_df.select_dtypes(include=[np.number]).columns
+            numeric_cols = numeric_cols.drop(self.target_col, errors='ignore')
+            
             for col in numeric_cols:
                 sigma = self.df[col].std()
                 deltas = np.random.uniform(

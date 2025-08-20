@@ -91,67 +91,117 @@ def load_water_quality_dataset(csv_path: str) -> pd.DataFrame:
 	return df
 
 def load_smart_grid_dataset(csv_path: str) -> pd.DataFrame:
-	df = pd.read_csv(csv_path)
-	# Veri setinde 'timestamp' sütunu yoksa oluşturulur, varsa işlenir.
-	if 'timestamp' not in df.columns:
-		df['timestamp'] = pd.date_range(start='2023-01-01', periods=len(df), freq='H')
-	else:
-		df['timestamp'] = pd.to_datetime(df['timestamp'])
-	
-	df = df.sort_values('timestamp').reset_index(drop=True)
-	df = df.set_index('timestamp')
-	
-	# 'stabf' sütununu kaldır. Bu sütun metin değerler içerdiği için hata veriyor.
-	if 'stabf' in df.columns:
-		df = df.drop(columns=['stabf'])
-	
-	# Eksik değerleri doldurma (önemli, çünkü bazı Kaggle verilerinde NaN olabilir)
-	for col in df.columns:
-		if df[col].isnull().any():
-			if df[col].dtype in ['float64', 'int64']:
-				df[col] = df[col].fillna(df[col].mean())
-			else:
-				df[col] = df[col].fillna(df[col].mode()[0])
-	
-	return df
+    df = pd.read_csv(csv_path)
+    
+    # Timestamp sütunu varsa işle, yoksa oluştur - SONRA KALDIR
+    if 'timestamp' not in df.columns:
+        df['timestamp'] = pd.date_range(start='2023-01-01', periods=len(df), freq='H')
+    else:
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+    
+    df = df.sort_values('timestamp').reset_index(drop=True)
+    
+    # 'stabf' sütununu kaldır (metin değerler içerdiği için)
+    if 'stabf' in df.columns:
+        df = df.drop(columns=['stabf'])
+    
+    # ÖNEMLİ: Timestamp sütununu tamamen kaldır (sklearn ile uyumsuz)
+    if 'timestamp' in df.columns:
+        df = df.drop(columns=['timestamp'])
+    
+    # Sayısal olmayan sütunları kaldır
+    numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+    df = df[numeric_cols]
+    
+    # Eksik değerleri doldur
+    for col in df.columns:
+        if df[col].isnull().any():
+            if df[col].dtype in ['float64', 'int64']:
+                df[col] = df[col].fillna(df[col].mean())
+            else:
+                df[col] = df[col].fillna(df[col].mode()[0])
+    
+    print(f"Dataset loaded with {len(df)} rows and {len(df.columns)} columns")
+    print(f"Columns: {list(df.columns)}")
+    print(f"Data types: {df.dtypes.to_dict()}")
+    
+    return df
 
 def load_traffic_dataset(csv_path: str) -> pd.DataFrame:
+    """
+    Load and preprocess traffic dataset for machine learning.
+    Returns DataFrame with integer index to avoid datetime index issues.
+    """
     df = pd.read_csv(csv_path)
-    df['trafficindexdate'] = pd.to_datetime(df['trafficindexdate'])
-    df = df.sort_values('trafficindexdate').set_index('trafficindexdate')
     
+    # Process datetime column but don't set it as index
+    if 'trafficindexdate' in df.columns:
+        df['trafficindexdate'] = pd.to_datetime(df['trafficindexdate'])
+        # Sort by date
+        df = df.sort_values('trafficindexdate').reset_index(drop=True)
+        # Remove datetime column after sorting (causes issues with sklearn)
+        df = df.drop(columns=['trafficindexdate'])
+    
+    # Rename target column if needed
     if 'trafficindex' in df.columns:
         df.rename(columns={'trafficindex': 'average_traffic_index'}, inplace=True)
     
-    for col in df.columns:
-        if df[col].isnull().any() and df[col].dtype in ['float64', 'int64']:
+    # Handle missing values only for numeric columns
+    numeric_cols = df.select_dtypes(include=[np.number]).columns
+    for col in numeric_cols:
+        if df[col].isnull().any():
             df[col] = df[col].fillna(df[col].mean())
+    
+    # Remove any non-numeric columns that might cause issues
+    df = df[numeric_cols]
+    
+    print(f"Traffic dataset loaded with {len(df)} rows and {len(df.columns)} columns")
+    print(f"Columns: {list(df.columns)}")
+    print(f"Data types: {df.dtypes.to_dict()}")
+    
     return df
 
 def load_solar_power_dataset(csv_path: str) -> pd.DataFrame:
     df = pd.read_csv(csv_path)
-    df['DATE_TIME'] = pd.to_datetime(df['DATE_TIME'], dayfirst=True)
-    df = df.sort_values('DATE_TIME').set_index('DATE_TIME')
-    # Düzeltme: Index'i sıfırlayarak benzersiz hale getirme
-    df = df.reset_index(drop=True)
     
-    df = df.drop(columns=['PLANT_ID', 'SOURCE_KEY'])
+    # DateTime sütununu sıralama için kullan ama sonra kaldır (DSPO integer index gerektirir)
+    if 'DATE_TIME' in df.columns:
+        df['DATE_TIME'] = pd.to_datetime(df['DATE_TIME'], dayfirst=True)
+        df = df.sort_values('DATE_TIME')
+        # DateTime sütununu kaldır çünkü DSPO sadece sayısal verilerle çalışır
+        df = df.drop(columns=['DATE_TIME'])
     
+    # Gereksiz sütunları kaldır
+    columns_to_drop = ['PLANT_ID', 'SOURCE_KEY']
+    df = df.drop(columns=[col for col in columns_to_drop if col in df.columns])
+    
+    # Sayısal sütunlardaki eksik değerleri ortalama ile doldur
     for col in df.columns:
         if df[col].isnull().any() and df[col].dtype in ['float64', 'int64']:
             df[col] = df[col].fillna(df[col].mean())
+    
+    # Index'i sıfırla (DSPO integer RangeIndex gerektirir)
+    df = df.reset_index(drop=True)
+    
     return df
 
 def load_wind_power_dataset(csv_path: str) -> pd.DataFrame:
     df = pd.read_csv(csv_path)
-    # 'Date' sütununu datetime'a çevirip index yapma
-    df['Date'] = pd.to_datetime(df['Date'])
-    df = df.sort_values('Date').set_index('Date')
+    
+    # 'Date' sütunu varsa datetime'a çevirip kaldır (DSPO integer index gerektirir)
+    if 'Date' in df.columns:
+        df['Date'] = pd.to_datetime(df['Date'])
+        df = df.sort_values('Date')
+        # Date sütununu kaldır çünkü DSPO sadece sayısal verilerle çalışır
+        df = df.drop(columns=['Date'])
     
     # Sayısal sütunlardaki eksik değerleri ortalama ile doldurma
     for col in df.columns:
         if df[col].isnull().any() and df[col].dtype in ['float64', 'int64']:
             df[col] = df[col].fillna(df[col].mean())
+    
+    # Index'i sıfırla (DSPO integer RangeIndex gerektirir)
+    df = df.reset_index(drop=True)
             
     return df
 
@@ -431,4 +481,4 @@ def run_single_experiment(dataset_name: str):
     print(f"\n[OK] Deney tamamlandi. Sonuclar '{cfg.results_dir}' klasorune kaydedildi.")
 
 if __name__ == '__main__':
-	run_single_experiment("traffic")
+	run_single_experiment("solar_power")

@@ -153,8 +153,10 @@ class RandomAttack(Attack):
             # Flip class labels
             poisoned_df.loc[self.poison_indices, self.target_col] = 1 - poisoned_df.loc[self.poison_indices, self.target_col]
             
-            # Add random noise to features
-            numeric_cols = poisoned_df.select_dtypes(include=np.number).columns.drop(self.target_col, errors='ignore')
+            # Add random noise to features - SADECE SAYISAL SÜTUNLARI AL
+            numeric_cols = poisoned_df.select_dtypes(include=[np.number]).columns
+            numeric_cols = numeric_cols.drop(self.target_col, errors='ignore')
+            
             for col in numeric_cols:
                 sigma = self.df[col].std()
                 deltas = np.random.uniform(
