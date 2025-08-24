@@ -20,7 +20,7 @@ class DifferentiableLOF(base_defense.DifferentiableDefense):
 	def __call__(self, x: torch.Tensor) -> torch.Tensor:
 		pairwise_dist = torch.cdist(x, x)
 		k_distances, _ = torch.kthvalue(pairwise_dist, self.k + 1, dim=1)
-		# Basit, türevlenebilir proxy: k-mesafesi ne kadar büyükse, o kadar anomalidir.
+		# Simple, differentiable proxy: the larger the k-distance, the more anomalous it is.
 		return k_distances
 
 class LOFDefense(base_defense.Defense):
@@ -41,10 +41,10 @@ class DifferentiablePCA(base_defense.DifferentiableDefense):
 		self.n_components = n_components
 
 	def __call__(self, x: torch.Tensor) -> torch.Tensor:
-		# PCA'in türevlenebilir bir versiyonu: SVD (Singular Value Decomposition)
+		# A differentiable version of PCA: SVD (Singular Value Decomposition)
 		U, S, V = torch.svd(x - x.mean())
 		reconstruction = (U[:, :self.n_components] @ torch.diag(S[:self.n_components]) @ V[:, :self.n_components].T) + x.mean()
-		# Yeniden yapılandırma hatası anomali skorudur
+		# The reconstruction error is the anomaly score
 		return torch.sum((x - reconstruction)**2, dim=1)
 
 class PCADefense(base_defense.Defense):
@@ -68,9 +68,9 @@ class DifferentiableKDE(base_defense.DifferentiableDefense):
 		self.bandwidth = bandwidth
 
 	def __call__(self, x: torch.Tensor) -> torch.Tensor:
-		# Gaussian Kernel kullanarak KDE'nin türevlenebilir bir versiyonu
+		# A differentiable version of KDE using a Gaussian Kernel
 		pairwise_dist = torch.cdist(x, x)
-		# Anomali skoru = negatif log-olasılık
+		# Anomaly score = negative log-likelihood
 		log_density = torch.logsumexp(-0.5 * (pairwise_dist / self.bandwidth)**2, dim=1)
 		return -log_density
 
@@ -116,9 +116,9 @@ class IsolationForestDefense(base_defense.Defense):
         self.contamination = contamination
 
     def detect(self, series: pd.Series) -> pd.Series:
-        # Düzeltme: Isolation Forest'ın çalışması için yeterli benzersiz değer olup olmadığını kontrol et
+        # Check if there are enough unique values for Isolation Forest to work
         if series.nunique() < 2:
-            warnings.warn("IsolationForest için çok az sayıda benzersiz değer var. Boş anomali skorları döndürülüyor.", UserWarning)
+            warnings.warn("Too few unique values for IsolationForest. Returning empty anomaly scores.", UserWarning)
             return pd.Series(0, index=series.index)
             
         model = IsolationForest(contamination=self.contamination, random_state=42)

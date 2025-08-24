@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 
 
 class DifferentiableDefense(ABC):
-    """D-SPO saldırısının kullanacağı, türevlenebilir savunma proxy'leri için ana sınıf."""
+    """Main class for differentiable defense proxies to be used by the D-SPO attack."""
     @abstractmethod
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
         pass

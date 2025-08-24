@@ -31,12 +31,12 @@ class ExperimentConfig:
 	random_seed: int = 42
 	results_dir: Path = Path(BASE_DIR.parent.parent /"results")
 	
-	# Burada deneyler için kullanılacak tüm veri setlerini tanımlıyoruz.
+	# Here we define all datasets to be used for the experiments
 	datasets: Dict[str, DatasetConfig] = field(default_factory=lambda: {
 		"water_quality": DatasetConfig(
 			path=str(BASE_DIR.parent / "data" / "water_potability.csv"),
-			task_type="classification",
-			target_column="Potability"
+			task_type="regression",
+			target_column="Hardness"
 		),
 		"smart_grid": DatasetConfig(
 			path=str(BASE_DIR.parent / "data" / "smart_grid_stability_augmented.csv"),
@@ -81,7 +81,7 @@ def get_config() -> ExperimentConfig:
 
 def load_water_quality_dataset(csv_path: str) -> pd.DataFrame:
 	df = pd.read_csv(csv_path)
-	# NaN değerleri ortalama ile doldurma
+	# Fill NaN values with the mean
 	for col in df.columns:
 		if df[col].isnull().any():
 			if df[col].dtype in ['float64', 'int64']:
@@ -93,7 +93,7 @@ def load_water_quality_dataset(csv_path: str) -> pd.DataFrame:
 def load_smart_grid_dataset(csv_path: str) -> pd.DataFrame:
     df = pd.read_csv(csv_path)
     
-    # Timestamp sütunu varsa işle, yoksa oluştur - SONRA KALDIR
+    # If a Timestamp column exists, process it; otherwise, create one - REMOVE LATER
     if 'timestamp' not in df.columns:
         df['timestamp'] = pd.date_range(start='2023-01-01', periods=len(df), freq='H')
     else:
@@ -101,19 +101,19 @@ def load_smart_grid_dataset(csv_path: str) -> pd.DataFrame:
     
     df = df.sort_values('timestamp').reset_index(drop=True)
     
-    # 'stabf' sütununu kaldır (metin değerler içerdiği için)
+    # Drop the 'stabf' column (contains text values)
     if 'stabf' in df.columns:
         df = df.drop(columns=['stabf'])
     
-    # ÖNEMLİ: Timestamp sütununu tamamen kaldır (sklearn ile uyumsuz)
+    # IMPORTANT: Completely remove the Timestamp column (incompatible with sklearn)
     if 'timestamp' in df.columns:
         df = df.drop(columns=['timestamp'])
     
-    # Sayısal olmayan sütunları kaldır
+    # Remove non-numerical columns
     numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
     df = df[numeric_cols]
     
-    # Eksik değerleri doldur
+    # Fill missing values
     for col in df.columns:
         if df[col].isnull().any():
             if df[col].dtype in ['float64', 'int64']:
@@ -164,23 +164,23 @@ def load_traffic_dataset(csv_path: str) -> pd.DataFrame:
 def load_solar_power_dataset(csv_path: str) -> pd.DataFrame:
     df = pd.read_csv(csv_path)
     
-    # DateTime sütununu sıralama için kullan ama sonra kaldır (DSPO integer index gerektirir)
+    # Use the DateTime column for sorting, then drop it (DSPO requires integer index)
     if 'DATE_TIME' in df.columns:
         df['DATE_TIME'] = pd.to_datetime(df['DATE_TIME'], dayfirst=True)
         df = df.sort_values('DATE_TIME')
-        # DateTime sütununu kaldır çünkü DSPO sadece sayısal verilerle çalışır
+        # Drop the DateTime column because DSPO works only with numerical data
         df = df.drop(columns=['DATE_TIME'])
     
-    # Gereksiz sütunları kaldır
+    # Drop unnecessary columns
     columns_to_drop = ['PLANT_ID', 'SOURCE_KEY']
     df = df.drop(columns=[col for col in columns_to_drop if col in df.columns])
     
-    # Sayısal sütunlardaki eksik değerleri ortalama ile doldur
+    # Fill missing values in numerical columns with the mean
     for col in df.columns:
         if df[col].isnull().any() and df[col].dtype in ['float64', 'int64']:
             df[col] = df[col].fillna(df[col].mean())
     
-    # Index'i sıfırla (DSPO integer RangeIndex gerektirir)
+    # Reset the index (DSPO requires an integer RangeIndex)
     df = df.reset_index(drop=True)
     
     return df
@@ -188,20 +188,47 @@ def load_solar_power_dataset(csv_path: str) -> pd.DataFrame:
 def load_wind_power_dataset(csv_path: str) -> pd.DataFrame:
     df = pd.read_csv(csv_path)
     
-    # 'Date' sütunu varsa datetime'a çevirip kaldır (DSPO integer index gerektirir)
+    # If a 'Date' column exists, convert it to datetime and drop it (DSPO requires integer index)
     if 'Date' in df.columns:
         df['Date'] = pd.to_datetime(df['Date'])
         df = df.sort_values('Date')
-        # Date sütununu kaldır çünkü DSPO sadece sayısal verilerle çalışır
+        # Drop the Date column because DSPO works only with numerical data
         df = df.drop(columns=['Date'])
     
-    # Sayısal sütunlardaki eksik değerleri ortalama ile doldurma
-    for col in df.columns:
-        if df[col].isnull().any() and df[col].dtype in ['float64', 'int64']:
-            df[col] = df[col].fillna(df[col].mean())
     
-    # Index'i sıfırla (DSPO integer RangeIndex gerektirir)
+    # Fill missing values with the mean
+    for col in df.columns:
+        if df[col].dtype in ['float64', 'int64', 'float32', 'int32']:
+            # Check for NaN values
+            if df[col].isnull().any():
+                df[col] = df[col].fillna(df[col].mean())
+            
+            # Check and clean infinite values
+            if np.isinf(df[col]).any():
+                print(f"Warning: Infinite values found in {col}, replacing with median")
+                finite_values = df[col][np.isfinite(df[col])]
+                if len(finite_values) > 0:
+                    median_val = finite_values.median()
+                    df[col] = df[col].replace([np.inf, -np.inf], median_val)
+                else:
+                    df[col] = df[col].replace([np.inf, -np.inf], 0)
+            
+            # Check for extremely large values (outlier clipping)
+            q99 = df[col].quantile(0.99)
+            q01 = df[col].quantile(0.01)
+            if q99 > 1e6 or q01 < -1e6:
+                print(f"Warning: Extreme values in {col}, clipping to reasonable range")
+                df[col] = df[col].clip(lower=q01, upper=q99)
+    
+    # Reset the index (DSPO requires an integer RangeIndex)
     df = df.reset_index(drop=True)
+    
+    # Final check: Ensure all numerical values are finite
+    numeric_cols = df.select_dtypes(include=[np.number]).columns
+    for col in numeric_cols:
+        if not np.isfinite(df[col]).all():
+            print(f"Warning: Still non-finite values in {col} after cleaning")
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
             
     return df
 
@@ -211,7 +238,7 @@ def load_water_quality_monitoring_dataset(csv_path: str) -> pd.DataFrame:
         df['Timestamp'] = pd.to_datetime(df['Timestamp'])
         df = df.sort_values('Timestamp').set_index('Timestamp')
 
-    # DÜZELTME: Index'i sıfırlayarak benzersiz hale getirme
+    # Ensure uniqueness by resetting the index
     df = df.reset_index(drop=True)
 
     for col in df.columns:
@@ -231,51 +258,51 @@ DATASET_LOADERS = {
 }
 
 def save_results(df_results: pd.DataFrame, results_dir: Path, dataset_name: str, config: ExperimentConfig):
-    # Results klasörünü oluştur
+    # Create the Results folder
     results_dir.mkdir(exist_ok=True)
     
-    # Parametre bilgilerini al
+    # Retrieve parameter information
     budget_pct = list(config.attacks.values())[0].budget_pct
     perturb_strength = list(config.attacks.values())[0].perturb_strength
     
-    # Zaman damgası ekle (üstüne yazma sorunu için)
+    # Add a timestamp (to avoid overwrite issues)
     from datetime import datetime
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
-    # Dosya isimleri için prefix oluştur
+    # Create a prefix for file names
     file_prefix = f"{dataset_name}_budget{budget_pct:.3f}_perturb{perturb_strength:.2f}_{timestamp}"
     
-    # DataFrame'e parametre bilgilerini ekle
+    # Add parameter information to the DataFrame
     df_results['dataset_name'] = dataset_name
     df_results['budget_percent'] = budget_pct
     df_results['perturb_strength'] = perturb_strength
     df_results['timestamp'] = timestamp
     
-    # Tüm sonuçları CSV'ye kaydet
+    # Save all results to CSV
     csv_path = results_dir / f"{file_prefix}_results.csv"
     df_results.to_csv(csv_path, index=False)
     
-    # Impact metric sütununu belirle (task türüne göre)
+    # Determine the Impact metric column (depending on the task type)
     impact_column = None
     if 'impact_score' in df_results.columns:
         impact_column = 'impact_score'
     elif 'mae_degradation' in df_results.columns:
         impact_column = 'mae_degradation'
     else:
-        print("Uyarı: Impact metriği bulunamadı. Özet tablo oluşturulamıyor.")
+        print("Warning: Impact metric not found. Summary table cannot be created.")
         return file_prefix
     
-    # Özet tabloyu oluştur
+    # Create a summary table
     summary_columns = [impact_column, 'recall', 'f1_score']
     available_columns = [col for col in summary_columns if col in df_results.columns]
     
     if len(available_columns) < 2:
-        print("Uyarı: Yeterli metrik bulunamadı. Özet tablo oluşturulamıyor.")
+        print("Warning: Not enough metrics available. Summary table cannot be created.")
         return file_prefix
     
     summary = df_results.groupby('attack')[available_columns].mean().reset_index()
     
-    # Özet tablosuna parametre bilgilerini ekle
+    # Add parameter information to the summary table
     summary_with_params = pd.DataFrame({
         'Dataset': [dataset_name] * len(summary),
         'Budget (%)': [f"{budget_pct:.1%}"] * len(summary),
@@ -283,7 +310,7 @@ def save_results(df_results: pd.DataFrame, results_dir: Path, dataset_name: str,
         'Timestamp': [timestamp] * len(summary)
     })
     
-    # Sütun isimlerini güzelleştir
+    # Column names
     column_names = ['Attack']
     for col in available_columns:
         if col == 'impact_score':
@@ -299,16 +326,16 @@ def save_results(df_results: pd.DataFrame, results_dir: Path, dataset_name: str,
     
     summary.columns = column_names
     
-    # Parametre bilgileri ile birlikte birleştir
+    # Merge with parameter information
     final_summary = pd.concat([summary_with_params, summary.iloc[:, 1:]], axis=1)
     
-    # LaTeX tablosunu kaydet
+    # Save the LaTeX table
     latex_path = results_dir / f"{file_prefix}_summary.tex"
     with open(latex_path, "w") as f:
         f.write(final_summary.to_latex(index=False, float_format="%.3f"))
     
     print(f"\n{'='*50}")
-    print(f"SONUÇLAR KAYDEDİLDİ")
+    print(f"RESULTS SAVED")
     print(f"{'='*50}")
     print(f"Dataset: {dataset_name}")
     print(f"Budget: {budget_pct:.1%}")
@@ -316,24 +343,23 @@ def save_results(df_results: pd.DataFrame, results_dir: Path, dataset_name: str,
     print(f"CSV: {csv_path}")
     print(f"LaTeX: {latex_path}")
     print(f"{'='*50}")
-    print("ÖZET:")
+    print("SUMMARY:")
     print(final_summary.to_string(index=False))
     
     return file_prefix
 
 def plot_results(df_results: pd.DataFrame, results_dir: Path, dataset_name: str, config: ExperimentConfig, file_prefix: str):
     """
-    Saldırı etkisini (impact score) savunma kaçışı (evasion) ile karşılaştıran bir
-    dağılım grafiği (scatterplot) oluşturur ve kaydeder.
+    Creates and saves a scatter plot comparing attack impact (impact score) with defense evasion.
     """
-    # Results klasörünü oluştur
+    # Create the Results folder
     results_dir.mkdir(exist_ok=True)
     
-    # Parametre bilgilerini al
+    # Retrieve parameter information
     budget_pct = list(config.attacks.values())[0].budget_pct
     perturb_strength = list(config.attacks.values())[0].perturb_strength
     
-    # Impact metriğini belirle
+    # Determine the Impact metric
     impact_column = None
     if 'impact_score' in df_results.columns:
         impact_column = 'impact_score'
@@ -342,11 +368,11 @@ def plot_results(df_results: pd.DataFrame, results_dir: Path, dataset_name: str,
         impact_column = 'mae_degradation'
         impact_label = 'Attack Impact (MAE Degradation)'
     else:
-        print("Uyarı: Impact metriği bulunamadı. Grafik oluşturulamıyor.")
+        print("Warning: Impact metric not found. Plot cannot be created.")
         return
     
     if 'recall' not in df_results.columns:
-        print("Uyarı: Recall metriği bulunamadı. Grafik oluşturulamıyor.")
+        print("Warning: Recall metric not found. Plot cannot be created.")
         return
     
     plt.figure(figsize=(12, 8))
@@ -362,7 +388,7 @@ def plot_results(df_results: pd.DataFrame, results_dir: Path, dataset_name: str,
         alpha=0.8
     )
     
-    # Başlık ve alt başlık parametre bilgileri ile
+    # Set title and subtitle with parameter information
     main_title = f'Attack Impact vs. Stealth (Defense Evasion)\nDataset: {dataset_name.upper()}'
     subtitle = f'Budget: {budget_pct:.1%} | Perturb Strength: {perturb_strength} | Defenses: {len(df_results["defense"].unique())}'
     
@@ -372,50 +398,50 @@ def plot_results(df_results: pd.DataFrame, results_dir: Path, dataset_name: str,
     plt.xlabel('Defense Evasion (1 - Recall)', fontsize=12)
     plt.ylabel(impact_label, fontsize=12)
     
-    # Legend'ı düzenle
+    # Adjust the legend
     plt.legend(title='Attack & Defense', bbox_to_anchor=(1.05, 1), loc='upper left')
     
     plt.grid(True, which='both', linestyle='--', linewidth=0.5, alpha=0.7)
     plt.tight_layout()
     
-    # Grafik dosyasını kaydet
+    # Save the plot file
     fig_path = results_dir / f"{file_prefix}_plot.png"
     plt.savefig(fig_path, dpi=300, bbox_inches='tight')
     
-    print(f"Grafik kaydedildi: {fig_path}")
+    print(f"Plot saved: {fig_path}")
     plt.show()
 
 def run_single_experiment(dataset_name: str):
     """
-    Belirtilen veri seti üzerinde saldırı ve savunma deneylerini çalıştırır.
+    Runs attack and defense experiments on the specified dataset.
     """
     cfg = get_config()
-    np.random.seed(cfg.random_seed) # Random seed'i başta ayarla
+    np.random.seed(cfg.random_seed) # Set the random seed at the beginning
     torch.manual_seed(cfg.random_seed)
     
     all_results = []
     
     if dataset_name not in cfg.datasets:
-        print(f"Hata: Konfigürasyonda '{dataset_name}' adlı veri seti bulunamadı.")
+        print(f"Error: Dataset named '{dataset_name}' not found in the configuration.")
         return
     
     dataset_cfg = cfg.datasets[dataset_name]
     
-    print(f"\n\n{'='*20} '{dataset_name.upper()}' için deneyler başlatılıyor {'='*20}")
+    print(f"\n\n{'='*20} Starting experiments for '{dataset_name.upper()}' {'='*20}")
     
     try:
         df_clean = DATASET_LOADERS[dataset_name](dataset_cfg.path)
-        print(f"'{dataset_name}' veri seti başarıyla yüklendi.")
+        print(f"'{dataset_name}' loaded successfully.")
     except FileNotFoundError:
-        print(f"Hata: '{dataset_cfg.path}' dosyası '{dataset_name}' veri seti için bulunamadı. Deney atlanıyor.")
+        print(f"Error: File '{dataset_cfg.path}' for dataset '{dataset_name}' not found. Skipping experiment.")
         return
         
     defenses = {name: model_detectors.get_defense(name) for name in cfg.active_defenses}
 
     for attack_name, attack_cfg in cfg.attacks.items():
-        print(f"\n--- Saldırı: {attack_name.upper()} ---")
+        print(f"\n--- Attack: {attack_name.upper()} ---")
 
-        # Her saldırı için rastgeleliği yeniden ayarla, ancak farklı bir seed ile.
+        # Reset randomness for each attack, but with a different seed
         np.random.seed(cfg.random_seed + list(cfg.attacks.keys()).index(attack_name))
         torch.manual_seed(cfg.random_seed + list(cfg.attacks.keys()).index(attack_name))
 
@@ -430,7 +456,7 @@ def run_single_experiment(dataset_name: str):
         attack_instance = base_attack.get_attack(attack_name, attack_cfg, df_clean, dataset_cfg.target_column, dataset_cfg.task_type, defenses)
         df_poisoned = attack_instance.craft(base_model)
         
-        # Düzeltme: Zehirlenen noktaların doğru listesini saldırı nesnesinden alıyoruz.
+        # Fix: Obtain the correct list of poisoned points from the attack object
         poison_indices = attack_instance.poison_indices
 
         impact_metrics = stat_detectors.evaluate_impact(df_clean, df_poisoned, dataset_cfg.target_column, dataset_cfg.task_type)
@@ -438,12 +464,12 @@ def run_single_experiment(dataset_name: str):
         stealth_metrics = stat_detectors.evaluate_stealth(df_clean[dataset_cfg.target_column], df_poisoned[dataset_cfg.target_column])
         
         for defense_name, defense_instance in defenses.items():
-            print(f"  - Savunmaya karşı test: {defense_name}")
+            print(f"  - Testing against defense: {defense_name}")
             
             defense_target_column = dataset_cfg.target_column
             
             if defense_target_column not in df_poisoned.columns:
-                print(f"    - Uyarı: '{defense_target_column}' bulunamadı. Savunma atlanıyor.")
+                print(f"    - Warning: '{defense_target_column}' not found. Skipping defense.")
                 continue
                 
             anomaly_scores = defense_instance.detect(df_poisoned[defense_target_column])
@@ -478,7 +504,7 @@ def run_single_experiment(dataset_name: str):
     print("="*50)
     print(df_results.to_string())
     
-    print(f"\n[OK] Deney tamamlandi. Sonuclar '{cfg.results_dir}' klasorune kaydedildi.")
+    print(f"\n[OK] Experiment completed. Results saved in '{cfg.results_dir}' folder.")
 
 if __name__ == '__main__':
-	run_single_experiment("solar_power")
+	run_single_experiment("water_quality")

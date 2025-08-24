@@ -25,7 +25,7 @@ class GreedyResidueAttack(base_attack.Attack):
 
             poisoned_df.loc[self.poison_indices, self.target_col] = 1 - poisoned_df.loc[self.poison_indices, self.target_col]
             
-            # SADECE SAYISAL SÜTUNLARI AL
+            # Select only the numerical columns
             numeric_cols = poisoned_df.select_dtypes(include=[np.number]).columns
             numeric_cols = numeric_cols.drop(self.target_col, errors='ignore')
             

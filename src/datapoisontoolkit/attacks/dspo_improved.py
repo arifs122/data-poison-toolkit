@@ -16,13 +16,13 @@ class DSPOAttack(base_attack.Attack):
     def __init__(self, config: base_attack.DSPOConfig, df: pd.DataFrame, target_col: str, task_type: str, defenses: Dict[str, base_defense.Defense]):
         super().__init__(config, df, target_col, task_type)
         self.config = config
-        self.df = df.copy()  # DataFrame'in bir kopyasını al
+        self.df = df.copy()  # Take a copy of the DataFrame
         self.target_col = target_col
         self.task_type = task_type
         
-        # DataFrame'in integer index kullandığından emin ol
+        # Ensure that the DataFrame uses an integer index
         if not isinstance(self.df.index, pd.RangeIndex):
-            print("DataFrame indexini integer indexe çeviriliyor...")
+            print("Converting the DataFrame index to an integer index...")
             self.df = self.df.reset_index(drop=True)
         
         # Device selection
@@ -108,28 +108,28 @@ class DSPOAttack(base_attack.Attack):
             poisoned_points = poisoned_data[poison_mask]
             if len(poisoned_points) > 0:
                 try:
-                    # Defense proxy için k değerini kontrol et ve ayarla
+                    # Check and set the k value for the defense proxy
                     if hasattr(defense_proxy, 'k'):
-                        # k değerini poisoned points sayısından küçük olacak şekilde ayarla
+                        # Set k to be smaller than the number of poisoned points
                         original_k = defense_proxy.k
                         max_k = len(poisoned_points) - 1
                         if max_k > 0:
                             defense_proxy.k = min(original_k, max_k)
                         else:
-                            # Tek bir point varsa, k=1 olarak ayarla
+                            # If there is only a single point, set k = 1
                             defense_proxy.k = 1
                     
                     anomaly_scores = defense_proxy(poisoned_points.unsqueeze(1))
                     defense_loss = anomaly_scores.mean()
                     total_defense_loss += defense_loss
                     
-                    # k değerini geri yükle
+                    # Restore the k value
                     if hasattr(defense_proxy, 'k'):
                         defense_proxy.k = original_k
                         
                 except RuntimeError as e:
                     if "kthvalue" in str(e) or "out of range" in str(e):
-                        # k-NN hatası durumunda bu defense'i atla
+                        # Skip this defense in case of a k-NN error
                         print(f"Warning: Skipping {defense_name} due to insufficient points in batch")
                         continue
                     else:

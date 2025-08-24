@@ -8,8 +8,8 @@ from typing import Dict
 @dataclass
 class BaseAttackConfig:
     """Base configuration class for all attack types."""
-    budget_pct: float = 0.03  # Percentage of data to poison
-    perturb_strength: float = 0.5 # Maximum strength of perturbations (in terms of standard deviation)
+    budget_pct: float = 0.02  # Percentage of data to poison
+    perturb_strength: float = 0.2 # Maximum strength of perturbations (in terms of standard deviation)
 
 @dataclass
 class DSPOConfig(BaseAttackConfig):
@@ -153,7 +153,7 @@ class RandomAttack(Attack):
             # Flip class labels
             poisoned_df.loc[self.poison_indices, self.target_col] = 1 - poisoned_df.loc[self.poison_indices, self.target_col]
             
-            # Add random noise to features - SADECE SAYISAL SÜTUNLARI AL
+            # Add random noise to features
             numeric_cols = poisoned_df.select_dtypes(include=[np.number]).columns
             numeric_cols = numeric_cols.drop(self.target_col, errors='ignore')
             

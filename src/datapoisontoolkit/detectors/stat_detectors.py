@@ -10,7 +10,7 @@ from sklearn.preprocessing import StandardScaler
 
 
 def evaluate_stealth(clean_series: pd.Series, poison_series: pd.Series) -> dict:
-    """Saldırının gizliliğini, istatistiksel dağılımları karşılaştırarak tek bir puanla ölçer."""
+    """Measures the stealthiness of the attack with a single score by comparing statistical distributions."""
     if clean_series.dtype not in ['float64', 'int64']:
         return {"stealth_score": "N/A"}
         
@@ -18,8 +18,8 @@ def evaluate_stealth(clean_series: pd.Series, poison_series: pd.Series) -> dict:
     std_shift_std = np.abs(poison_series.std() - clean_series.std()) / clean_series.std()
     wasserstein_dist = wasserstein_distance(clean_series.dropna(), poison_series.dropna())
     
-    # Tüm metrikleri toplayarak tek bir gizlilik puanı oluştur
-    # Bu değer ne kadar düşükse, saldırı o kadar gizlidir.
+    # Aggregate all metrics to create a single stealthiness score
+    # The lower this value, the stealthier the attack.
     composite_stealth = mean_shift_std + std_shift_std + wasserstein_dist
     
     return {"composite_stealth": composite_stealth}
@@ -28,30 +28,30 @@ def evaluate_impact(clean_df: pd.DataFrame, poison_df: pd.DataFrame, target_col:
     """
     Saldırının, temiz veriyle eğitilmiş modele kıyasla zehirli veriyle eğitilen modelin performansını nasıl etkilediğini ölçer.
     """
-    # 1. Veriyi Temiz DataFrame'den ayır.
+    # 1. Separate the data from the Clean DataFrame.
     X_clean = clean_df.drop(columns=[target_col])
     y_clean = clean_df[target_col]
     
-    # 2. Zehirli DataFrame'den özellikleri ve etiketleri ayır.
+    # 2. Separate features and labels from the poisoned DataFrame.
     X_poisoned = poison_df.drop(columns=[target_col])
     y_poisoned = poison_df[target_col]
     
-    # 3. Veriyi eğitim ve test setlerine ayır. Zehirli ve temiz setler aynı indekse sahip olmalı.
+    # 3. Split the data into training and test sets. Poisoned and clean sets should have the same indices.
     X_train_clean, X_test_clean, y_train_clean, y_test_clean = train_test_split(
         X_clean, y_clean, test_size=0.3, random_state=0)
     
-    # Zehirli eğitim seti, temiz test seti ile aynı şekilde ayrılmalıdır.
+    # The poisoned training set should be split in the same way as the clean test set.
     X_train_poisoned = X_poisoned.loc[X_train_clean.index]
     y_train_poisoned = y_poisoned.loc[y_train_clean.index]
 
-    # 4. Veri ölçeklendirmesi (Eğitim verisine göre fit edip, test verisine transform et).
+    # 4. Scale the data (fit on the training data and transform the test data).
     scaler = StandardScaler()
     X_train_clean_scaled = scaler.fit_transform(X_train_clean)
     X_test_clean_scaled = scaler.transform(X_test_clean)
     
     X_train_poisoned_scaled = scaler.fit_transform(X_train_poisoned)
     
-    # 5. Model seçimi.
+    # 5. Select the model.
     if task_type == 'classification':
         model_clean = RandomForestClassifier(n_estimators=100, random_state=0)
         model_poisoned = RandomForestClassifier(n_estimators=100, random_state=0)
@@ -61,11 +61,11 @@ def evaluate_impact(clean_df: pd.DataFrame, poison_df: pd.DataFrame, target_col:
     else:
         raise ValueError(f"Unknown task type: {task_type}")
 
-    # 6. Temiz ve zehirli verilerle ayrı ayrı modelleri eğit.
+    # 6. Train models separately on clean and poisoned data.
     model_clean.fit(X_train_clean_scaled, y_train_clean)
     model_poisoned.fit(X_train_poisoned_scaled, y_train_poisoned)
 
-    # 7. Her iki modelin de temiz test seti üzerindeki performansını ölç.
+    # 7. Evaluate the performance of both models on the clean test set.
     y_pred_clean_model = model_clean.predict(X_test_clean_scaled)
     y_pred_poisoned_model = model_poisoned.predict(X_test_clean_scaled)
     
