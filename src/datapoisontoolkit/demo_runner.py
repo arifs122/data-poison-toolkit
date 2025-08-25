@@ -506,5 +506,131 @@ def run_single_experiment(dataset_name: str):
     
     print(f"\n[OK] Experiment completed. Results saved in '{cfg.results_dir}' folder.")
 
+def main():
+    """
+    Main entry point for the Data Poisoning Toolkit console application.
+    Supports command line arguments for dataset selection and configuration.
+    """
+    import argparse
+    import sys
+    
+    # Print toolkit information
+    print("""
+    ╔══════════════════════════════════════════════════════════════════╗
+    ║                  🛡️ Data Poisoning Toolkit                      ║
+    ║            A Comprehensive Framework for ML Security Research     ║
+    ║                                                                  ║
+    ║  Authors: M.A. Yagiz, M.A. Dayi, Dr. P. Goktas                 ║
+    ║  BlackHat Europe 2025 | IEEE Conference Submission              ║
+    ╚══════════════════════════════════════════════════════════════════╝
+    """)
+    
+    parser = argparse.ArgumentParser(
+        description="Data Poisoning Toolkit - ML Security Research Framework",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  datapoisontoolkit                           # Run with default water_quality dataset
+  datapoisontoolkit --dataset smart_grid     # Run with smart_grid dataset
+  datapoisontoolkit --list-datasets          # Show available datasets
+  datapoisontoolkit --dataset water_quality --attack dspo  # Run specific attack
+
+For academic citation and more information, visit:
+https://github.com/[username]/data-poison-toolkit
+        """
+    )
+    
+    parser.add_argument(
+        "--dataset", 
+        type=str, 
+        default="water_quality",
+        help="Dataset to use for experiments (default: water_quality)"
+    )
+    
+    parser.add_argument(
+        "--attack",
+        type=str,
+        help="Specific attack to run (random, greedy_residue, dspo)"
+    )
+    
+    parser.add_argument(
+        "--list-datasets",
+        action="store_true",
+        help="List all available datasets and exit"
+    )
+    
+    parser.add_argument(
+        "--list-attacks",
+        action="store_true",
+        help="List all available attacks and exit"
+    )
+    
+    parser.add_argument(
+        "--version",
+        action="version",
+        version="Data Poisoning Toolkit v1.0.0"
+    )
+    
+    args = parser.parse_args()
+    
+    # Get configuration
+    cfg = get_config()
+    
+    # Handle list operations
+    if args.list_datasets:
+        print("\n📊 Available Datasets:")
+        print("=" * 50)
+        for name, config in cfg.datasets.items():
+            print(f"  • {name:<25} | {config.task_type:<12} | {config.target_column}")
+        print("\n💡 Use --dataset <name> to select a specific dataset")
+        sys.exit(0)
+    
+    if args.list_attacks:
+        print("\n⚔️ Available Attacks:")
+        print("=" * 40)
+        for name in cfg.attacks.keys():
+            print(f"  • {name}")
+        print("\n💡 Use --attack <name> to select a specific attack")
+        sys.exit(0)
+    
+    # Validate dataset
+    if args.dataset not in cfg.datasets:
+        print(f"❌ Error: Dataset '{args.dataset}' not found.")
+        print(f"Available datasets: {', '.join(cfg.datasets.keys())}")
+        print("Use --list-datasets to see all options.")
+        sys.exit(1)
+    
+    # Filter attacks if specified
+    if args.attack:
+        if args.attack not in cfg.attacks:
+            print(f"❌ Error: Attack '{args.attack}' not found.")
+            print(f"Available attacks: {', '.join(cfg.attacks.keys())}")
+            print("Use --list-attacks to see all options.")
+            sys.exit(1)
+        
+        # Keep only the specified attack
+        cfg.attacks = {args.attack: cfg.attacks[args.attack]}
+        print(f"🎯 Running only '{args.attack}' attack")
+    
+    print(f"\n🚀 Starting experiment with dataset: {args.dataset}")
+    print(f"📋 Active defenses: {', '.join(cfg.active_defenses)}")
+    print(f"⚔️ Attacks to test: {', '.join(cfg.attacks.keys())}")
+    print("\n" + "="*60)
+    
+    try:
+        run_single_experiment(args.dataset)
+        print("\n✅ Experiment completed successfully!")
+    except KeyboardInterrupt:
+        print("\n⚠️ Experiment interrupted by user.")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n❌ Experiment failed with error: {e}")
+        print("💡 Check dataset paths and configuration.")
+        sys.exit(1)
+
 if __name__ == '__main__':
-	run_single_experiment("water_quality")
+    if len(sys.argv) > 1:
+        main()
+    else:
+        # Default behavior when run without arguments
+        run_single_experiment("water_quality")
