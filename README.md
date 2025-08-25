@@ -9,7 +9,7 @@
 [![BlackHat Europe](https://img.shields.io/badge/BlackHat%20Europe-2025-black.svg)](https://www.blackhat.com/eu-25/)
 [![IEEE Conference](https://img.shields.io/badge/IEEE-Submission-blue.svg)](https://ieee.org/)
 
-*Presented at BlackHat Europe 2025 | Submitted to IEEE Conference*
+*Submitted at BlackHat Europe 2025 | Submitted to IEEE Conference*
 
 </div>
 
