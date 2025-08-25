@@ -1,0 +1,39 @@
+# Development Dependencies for Data Poisoning Toolkit
+# Install with: pip install -r requirements-dev.txt
+
+# Testing Framework
+pytest>=6.0.0
+pytest-cov>=2.0.0
+pytest-xdist>=2.0.0
+
+# Code Quality
+black>=22.0.0
+flake8>=4.0.0
+mypy>=0.900
+isort>=5.0.0
+pre-commit>=2.15.0
+
+# Documentation
+sphinx>=4.0.0
+sphinx-rtd-theme>=1.0.0
+nbsphinx>=0.8.0
+
+# Package Building
+build>=0.7.0
+twine>=3.4.0
+wheel>=0.37.0
+setuptools-scm>=6.2.0
+
+# Development Tools
+ipython>=8.0.0
+jupyter>=1.0.0
+ipywidgets>=8.0.0
+notebook>=6.4.0
+
+# Security Analysis
+bandit>=1.7.0
+safety>=1.10.0
+
+# Performance Profiling
+memory-profiler>=0.60.0
+line-profiler>=3.5.0
