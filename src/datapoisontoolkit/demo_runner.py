@@ -3,6 +3,7 @@ import pandas as pd
 import torch
 import matplotlib.pyplot as plt
 import seaborn as sns
+import sys
 
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -512,7 +513,7 @@ def main():
     Supports command line arguments for dataset selection and configuration.
     """
     import argparse
-    import sys
+    
     
     # Print toolkit information
     print("""

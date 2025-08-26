@@ -23,20 +23,20 @@ __status__ = "Production"
 from .demo_runner import ExperimentConfig, DatasetConfig, get_config
 
 # Attack modules
-from .attacks.base_attack import BaseAttack, BaseAttackConfig, DSPOConfig
+from .attacks.base_attack import Attack, BaseAttackConfig, DSPOConfig
 
 # Defense modules  
-from .detectors.base_defense import BaseDefense
+from .detectors.base_defense import Defense
 
 # Make key classes available at package level
 __all__ = [
     "ExperimentConfig",
     "DatasetConfig", 
     "get_config",
-    "BaseAttack",
+    "Attack",
     "BaseAttackConfig",
     "DSPOConfig",
-    "BaseDefense",
+    "Defense",
     "__version__",
     "__author__",
 ]
