@@ -134,7 +134,6 @@ graph LR
 | ⚡ **Energy** | Smart Grid | Regression | Power Distribution | Critical Infrastructure |
 | 🚗 **Transportation** | Traffic Index | Regression | Traffic Flow | Urban Security |
 | ☀️ **Renewable Energy** | Solar Power | Regression | Energy Yield | Grid Stability |
-| 💨 **Wind Energy** | Wind Power | Regression | Power Generation | Resource Management |
 | 🌊 **Water Monitoring** | Brisbane Quality | Regression | Water Speed | Environmental Security |
 
 ---
