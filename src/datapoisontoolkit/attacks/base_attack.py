@@ -1,24 +1,64 @@
 import pandas as pd
-
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datapoisontoolkit.detectors import base_defense
-from typing import Dict
+from typing import Dict, Optional
 
 @dataclass
 class BaseAttackConfig:
     """Base configuration class for all attack types."""
     budget_pct: float = 0.02  # Percentage of data to poison
-    perturb_strength: float = 0.2 # Maximum strength of perturbations (in terms of standard deviation)
+    perturb_strength: float = 0.2  # Maximum strength of perturbations
+    
+    def update_from_interactive_config(self, interactive_config: Dict[str, any]):
+        """Update configuration from interactive user input"""
+        if 'budget_pct' in interactive_config:
+            self.budget_pct = interactive_config['budget_pct']
+        if 'perturb_strength' in interactive_config:
+            self.perturb_strength = interactive_config['perturb_strength']
 
 @dataclass
 class DSPOConfig(BaseAttackConfig):
     """Configuration specifically for D-SPO (Differentiable Shielded Poisoning Oracle) attack."""
-    num_iterations: int = 200           # Increased number of optimization iterations
-    learning_rate: float = 0.05          # Much higher learning rate for faster convergence
-    lambda_defense: float = 0.1          # Lower weight for defense evasion (less emphasis)
-    lambda_stealth: float = 0.05         # Very low weight for stealth loss (minimal emphasis)
-    lambda_impact: float = 5.0           # HIGH weight for impact loss (maximum emphasis)
+    num_iterations: int = 200
+    learning_rate: float = 0.05
+    lambda_defense: float = 0.1
+    lambda_stealth: float = 0.05
+    lambda_impact: float = 5.0
+    batch_size: Optional[int] = None  # New field for batch processing
+    
+    def update_from_interactive_config(self, interactive_config: Dict[str, any]):
+        """Update DSPO-specific configuration from interactive input"""
+        # First update base parameters
+        super().update_from_interactive_config(interactive_config)
+        
+        # Then update DSPO-specific parameters
+        if 'num_iterations' in interactive_config:
+            self.num_iterations = interactive_config['num_iterations']
+        if 'learning_rate' in interactive_config:
+            self.learning_rate = interactive_config['learning_rate']
+        if 'batch_size' in interactive_config:
+            self.batch_size = interactive_config['batch_size']
+        if 'lambda_impact' in interactive_config:
+            self.lambda_impact = interactive_config['lambda_impact']
+        if 'lambda_stealth' in interactive_config:
+            self.lambda_stealth = interactive_config['lambda_stealth']
+        if 'lambda_defense' in interactive_config:
+            self.lambda_defense = interactive_config['lambda_defense']
+    
+    @classmethod
+    def from_interactive_config(cls, interactive_config: Dict[str, any]) -> 'DSPOConfig':
+        """Create DSPOConfig directly from interactive configuration"""
+        return cls(
+            budget_pct=interactive_config.get('budget_pct', 0.02),
+            perturb_strength=interactive_config.get('perturb_strength', 0.2),
+            num_iterations=interactive_config.get('num_iterations', 200),
+            learning_rate=interactive_config.get('learning_rate', 0.05),
+            lambda_defense=interactive_config.get('lambda_defense', 0.1),
+            lambda_stealth=interactive_config.get('lambda_stealth', 0.05),
+            lambda_impact=interactive_config.get('lambda_impact', 5.0),
+            batch_size=interactive_config.get('batch_size', None)
+        )
 
 class Attack(ABC):
     """
@@ -77,8 +117,46 @@ class Attack(ABC):
         clean_features = self.df.drop(self.target_col, axis=1)
         diff = (poisoned_features != clean_features).any(axis=1)
         return self.df.index[diff]
+
+def create_attack_config_from_interactive(
+    attack_name: str, 
+    interactive_config: Dict[str, any]
+) -> BaseAttackConfig:
+    """
+    Create appropriate attack configuration from interactive parameters
     
-def get_attack(name: str, cfg: BaseAttackConfig, df: pd.DataFrame, target_col: str, task_type: str, defenses: Dict[str, base_defense.Defense]) -> Attack:
+    Args:
+        attack_name: Name of the attack
+        interactive_config: Dictionary containing user-provided parameters
+        
+    Returns:
+        Configured attack config object
+    """
+    if attack_name == "dspo":
+        return DSPOConfig.from_interactive_config(interactive_config)
+    elif attack_name == "random":
+        config = BaseAttackConfig()
+        config.update_from_interactive_config(interactive_config)
+        return config
+    elif attack_name == "greedy_residue":
+        config = BaseAttackConfig()
+        config.update_from_interactive_config(interactive_config)
+        return config
+    else:
+        # Default fallback
+        config = BaseAttackConfig()
+        config.update_from_interactive_config(interactive_config)
+        return config
+    
+def get_attack(
+    name: str, 
+    cfg: BaseAttackConfig, 
+    df: pd.DataFrame, 
+    target_col: str, 
+    task_type: str, 
+    defenses: Dict[str, base_defense.Defense],
+    interactive_config: Optional[Dict[str, any]] = None
+) -> Attack:
     """
     Factory function to instantiate attack objects.
     
@@ -87,11 +165,12 @@ def get_attack(name: str, cfg: BaseAttackConfig, df: pd.DataFrame, target_col: s
     
     Args:
         name: Name of the attack to instantiate
-        cfg: Configuration for the attack
+        cfg: Configuration for the attack (can be overridden by interactive_config)
         df: Input dataset
         target_col: Target column name
         task_type: ML task type
         defenses: Dictionary of defense mechanisms
+        interactive_config: Optional interactive configuration to override cfg
         
     Returns:
         Instance of the requested attack class
@@ -99,6 +178,11 @@ def get_attack(name: str, cfg: BaseAttackConfig, df: pd.DataFrame, target_col: s
     Raises:
         ValueError: If an unknown attack name is provided
     """
+    
+    # If interactive config is provided, create new config from it
+    if interactive_config is not None:
+        cfg = create_attack_config_from_interactive(name, interactive_config)
+    
     if name == "random": 
         return RandomAttack(cfg, df, target_col, task_type)
     elif name == "greedy_residue":
@@ -106,21 +190,49 @@ def get_attack(name: str, cfg: BaseAttackConfig, df: pd.DataFrame, target_col: s
         return greedy_residue_mock.GreedyResidueAttack(cfg, df, target_col, task_type)
     elif name == "dspo":
         from datapoisontoolkit.attacks import dspo_improved
-        # Convert to DSPOConfig if needed
+        
+        # Ensure we have DSPOConfig
         if not isinstance(cfg, DSPOConfig):
-            cfg = DSPOConfig(
-                budget_pct=cfg.budget_pct,
-                perturb_strength=cfg.perturb_strength,
-                num_iterations=100,
-                learning_rate=0.01,
-                lambda_defense=0.5,
-                lambda_stealth=0.1,
-                lambda_impact=2.0
-            )
+            if interactive_config:
+                cfg = DSPOConfig.from_interactive_config(interactive_config)
+            else:
+                # Convert BaseAttackConfig to DSPOConfig with defaults
+                cfg = DSPOConfig(
+                    budget_pct=cfg.budget_pct,
+                    perturb_strength=cfg.perturb_strength,
+                    num_iterations=100,
+                    learning_rate=0.01,
+                    lambda_defense=0.5,
+                    lambda_stealth=0.1,
+                    lambda_impact=2.0
+                )
+        
         return dspo_improved.DSPOAttack(cfg, df, target_col, task_type, defenses)
     else:
         raise ValueError(f"Unknown attack: {name}")
 
+
+# Helper function for the demorunner integration
+def create_dspo_config_from_demo_runner(attack_config: Dict[str, any]) -> DSPOConfig:
+    """
+    Helper function to create DSPOConfig from demorunner attack_config
+    
+    Args:
+        attack_config: Dictionary from _configure_attack_parameters in demorunner
+        
+    Returns:
+        Properly configured DSPOConfig object
+    """
+    return DSPOConfig(
+        budget_pct=attack_config['budget_pct'],
+        perturb_strength=attack_config['perturb_strength'],
+        num_iterations=attack_config['num_iterations'],
+        learning_rate=attack_config['learning_rate'],
+        lambda_impact=attack_config.get('lambda_impact', 1.0),
+        lambda_stealth=attack_config.get('lambda_stealth', 0.3),
+        lambda_defense=attack_config.get('lambda_defense', 0.7),
+        batch_size=attack_config.get('batch_size', None)
+    )
 import numpy as np
 
 class RandomAttack(Attack):

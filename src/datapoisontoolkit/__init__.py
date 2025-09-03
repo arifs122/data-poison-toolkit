@@ -20,7 +20,7 @@ __license__ = "MIT"
 __status__ = "Production"
 
 # Core modules
-from .demo_runner import ExperimentConfig, DatasetConfig, get_config
+from .demo_runner import ExperimentConfig, AutoDatasetConfig, InteractiveDatasetConfig, get_config
 
 # Attack modules
 from .attacks.base_attack import Attack, BaseAttackConfig, DSPOConfig
@@ -31,7 +31,8 @@ from .detectors.base_defense import Defense
 # Make key classes available at package level
 __all__ = [
     "ExperimentConfig",
-    "DatasetConfig", 
+    "AutoDatasetConfig", 
+    "InteractiveDatasetConfig",
     "get_config",
     "Attack",
     "BaseAttackConfig",
@@ -121,7 +122,7 @@ if sys.version_info < (3, 8):
 # Security notice
 import warnings
 warnings.warn(
-    "⚠️ SECURITY NOTICE: This toolkit is designed for academic research and "
+    "SECURITY NOTICE: This toolkit is designed for academic research and "
     "authorized security testing only. Users are responsible for ensuring "
     "compliance with applicable laws and ethical guidelines. "
     "The authors do not support malicious use of this software.",
