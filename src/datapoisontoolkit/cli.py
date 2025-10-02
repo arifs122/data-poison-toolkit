@@ -77,23 +77,13 @@ Examples:
   # Interactive mode (recommended for first use)
   python -m datapoisontoolkit.cli interactive
 
-  # Quick attack on a dataset
-  python -m datapoisontoolkit.cli attack --data data/50Hertz.csv --type dspo --budget 10 --output results/
-
-  # Run specific attack with custom parameters
-  python -m datapoisontoolkit.cli attack --data data/Plant_1_Generation.csv --type random --budget 5 --strength 0.3
-
   # List available attacks and defenses
   python -m datapoisontoolkit.cli list
 
-  # Analyze a dataset without running attacks
-  python -m datapoisontoolkit.cli analyze --data data/traffic_index.csv
 
 Modes:
   interactive    Full interactive mode with dataset selection
-  attack        Run specific attack on a dataset
   list          Show available attacks and defenses
-  analyze       Analyze dataset structure
         '''
     )
     
@@ -105,65 +95,7 @@ Modes:
         help='Interactive mode - guided setup'
     )
     
-    # Attack mode
-    attack_parser = subparsers.add_parser(
-        'attack',
-        help='Run attack on dataset'
-    )
-    attack_parser.add_argument(
-        '--data',
-        required=True,
-        type=str,
-        help='Path to CSV dataset'
-    )
-    attack_parser.add_argument(
-        '--type',
-        choices=['random', 'greedy_residue', 'dspo', 'all'],
-        default='dspo',
-        help='Attack type (default: dspo)'
-    )
-    attack_parser.add_argument(
-        '--target',
-        type=str,
-        help='Target column name (auto-detected if not specified)'
-    )
-    attack_parser.add_argument(
-        '--budget',
-        type=float,
-        default=10.0,
-        help='Poison budget as percentage (default: 10.0)'
-    )
-    attack_parser.add_argument(
-        '--strength',
-        type=float,
-        default=0.5,
-        help='Perturbation strength (default: 0.5)'
-    )
-    attack_parser.add_argument(
-        '--iterations',
-        type=int,
-        default=100,
-        help='DSPO optimization iterations (default: 100)'
-    )
-    attack_parser.add_argument(
-        '--lr',
-        type=float,
-        default=0.01,
-        help='DSPO learning rate (default: 0.01)'
-    )
-    attack_parser.add_argument(
-        '--output',
-        type=str,
-        default='results',
-        help='Output directory (default: results)'
-    )
-    attack_parser.add_argument(
-        '--defenses',
-        nargs='+',
-        choices=['lof', 'pca', 'kde', 'forest', 'median', 'quantile', 'dbscan', 'all'],
-        default=['all'],
-        help='Defense mechanisms to test against (default: all)'
-    )
+    
     
     # List mode
     list_parser = subparsers.add_parser(
@@ -171,17 +103,6 @@ Modes:
         help='List available attacks and defenses'
     )
     
-    # Analyze mode
-    analyze_parser = subparsers.add_parser(
-        'analyze',
-        help='Analyze dataset structure'
-    )
-    analyze_parser.add_argument(
-        '--data',
-        required=True,
-        type=str,
-        help='Path to CSV dataset'
-    )
     
     args = parser.parse_args()
     
