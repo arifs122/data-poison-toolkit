@@ -164,34 +164,27 @@ pip install -e .
 pip install -r requirements.txt
 ```
 
-### 🎯 Quick Start
-
-```python
-from datapoisontoolkit import ExperimentConfig, DemoRunner
-
-# Configure experiment parameters
-config = ExperimentConfig(
-    dataset='water_quality',
-    attack_type='dspo_enhanced',
-    defense_methods=['lof', 'isolation_forest'],
-    budget=0.02,
-    duration=300
-)
-
-# Execute experiment
-runner = DemoRunner(config)
-results = runner.run_experiment()
-```
-
 ### 🔬 Command Line Interface
 
 ```bash
-# Run default experiment
-cd src
-python -m datapoisontoolkit.demo_runner
+# Help
+    cd src
+    python -m datapoisontoolkit.cli
 
-# Custom configuration
-python -m datapoisontoolkit.demo_runner --dataset smart_grid --attack greedy_residue
+# Interactive mode (recommended for first use)
+    python -m datapoisontoolkit.cli interactive
+
+# Quick attack on a dataset
+    python -m datapoisontoolkit.cli attack --data data/50Hertz.csv --type dspo --budget 10 --output results/
+
+# Run specific attack with custom parameters
+    python -m datapoisontoolkit.cli attack --data data/Plant_1_Generation.csv --type random --budget 5 --strength 0.3
+
+# List available attacks and defenses
+    python -m datapoisontoolkit.cli list
+
+# Analyze a dataset without running attacks
+    python -m datapoisontoolkit.cli analyze --data data/traffic_index.csv
 ```
 
 ---
