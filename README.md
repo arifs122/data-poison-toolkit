@@ -171,20 +171,12 @@ pip install -r requirements.txt
     cd src
     python -m datapoisontoolkit.cli
 
-# Interactive mode (recommended for first use)
+# Interactive mode
     python -m datapoisontoolkit.cli interactive
-
-# Quick attack on a dataset
-    python -m datapoisontoolkit.cli attack --data data/50Hertz.csv --type dspo --budget 10 --output results/
-
-# Run specific attack with custom parameters
-    python -m datapoisontoolkit.cli attack --data data/Plant_1_Generation.csv --type random --budget 5 --strength 0.3
 
 # List available attacks and defenses
     python -m datapoisontoolkit.cli list
 
-# Analyze a dataset without running attacks
-    python -m datapoisontoolkit.cli analyze --data data/traffic_index.csv
 ```
 
 ---
