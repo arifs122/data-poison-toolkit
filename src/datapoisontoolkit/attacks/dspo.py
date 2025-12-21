@@ -28,8 +28,23 @@ class DSPOAttack(base_attack.Attack):
         # Device selection
         self.device = "cuda" if torch.cuda.is_available() else "cpu"
         
-        # Batch size for processing (configurable)
-        self.batch_size = getattr(config, 'batch_size', 5000)  # Default 5k rows per batch
+        # Batch size for processing (configurable or auto-detected)
+        self.batch_size = getattr(config, 'batch_size', None)
+        if self.batch_size is None:
+            # Auto-detect batch size based on device and available memory
+            if self.device == "cuda":
+                # START_REVIEW: GPU batch size logic
+                # For GPU, we can be aggressive but cautious of VRAM
+                # 5000 is a safe default for most mid-range GPUs with tabular data
+                self.batch_size = 5000 
+                # END_REVIEW
+            else:
+                # START_REVIEW: CPU batch size logic
+                # For CPU, we want to fit in L3 cache if possible or avoid large memory spikes
+                # Smaller batches (e.g., 1024) are generally better for CPU cache locality and responsiveness
+                self.batch_size = 1024
+                print(f"CPU detected. Using smaller batch size ({self.batch_size}) for efficiency.")
+        
         
         # Prepare differentiable defense proxies
         self.diff_defenses = self._prepare_defense_proxies(defenses)
@@ -172,8 +187,13 @@ class DSPOAttack(base_attack.Attack):
         variance_amplification = torch.var(poisoned_subset) / (torch.var(clean_subset) + 1e-8)
         
         # Combine all factors (negate for maximization)
-        impact_loss = -(5.0 * mean_change + 4.0 * std_change + 5.0 * extremeness_loss + 
-                        3.0 * skew_change + 2.0 * kurt_change + 4.0 * variance_amplification)
+        # Using configurable weights from config
+        impact_loss = -(self.config.lambda_impact_mean * mean_change + 
+                        self.config.lambda_impact_std * std_change + 
+                        self.config.lambda_impact_extremeness * extremeness_loss + 
+                        self.config.lambda_impact_skew * skew_change + 
+                        self.config.lambda_impact_kurt * kurt_change + 
+                        self.config.lambda_impact_variance * variance_amplification)
         
         return impact_loss
     
@@ -185,18 +205,53 @@ class DSPOAttack(base_attack.Attack):
         
         # Initialize global delta storage (only for poisoned points)
         num_poison_points = len(self.original_indices_to_poison)
-        global_deltas = torch.zeros(num_poison_points, device=self.device, requires_grad=True)
+        
+        # Improvement: Greedy Initialization (Large uniform noise)
+        # Initialize with max perturbation to give optimizer a "head start" on impact
+        max_perturb = self.config.perturb_strength * self.sigma
+        
+        if self.config.use_stealth_scheduler:
+            # For hard defenses, start SAFE (small noise) and ramp up impact.
+            # This ensures we don't get stuck in zero-gradient zones far outside the boundary.
+            initial_noise = torch.randn(num_poison_points, device=self.device) * (0.01 * self.sigma)
+        else:
+            # Default: Start AGGRESSIVE (Greedy)
+            initial_noise = (torch.rand(num_poison_points, device=self.device) * 2 - 1) * max_perturb
+            
+        global_deltas = initial_noise.clone().detach().requires_grad_(True)
+        
         max_perturb = self.config.perturb_strength * self.sigma
         
         # Setup optimizer
         optimizer = torch.optim.Adam([global_deltas], lr=self.config.learning_rate, betas=(0.9, 0.999), weight_decay=1e-5)
-        scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=25, gamma=0.9)
+        
+        # Improvement: Use ReduceLROnPlateau for adaptive learning rate
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, mode='min', factor=0.5, patience=10
+        )
         
         pbar = tqdm(range(self.config.num_iterations), desc="Memory-Efficient D-SPO")
         
         for iteration in pbar:
             optimizer.zero_grad()
             
+            # Stealth Warm-up Scheduler
+            impact_scale = 1.0
+            defense_scale = 1.0
+            
+            if self.config.use_stealth_scheduler:
+                # Phase 1 (First 50%): Linear ramp-up of impact, Decay of defense
+                # Phase 2 (Last 50%): Full impact, Normal defense
+                warmup_iters = self.config.num_iterations * 0.5
+                if iteration < warmup_iters:
+                    # Impact: 0 -> 1
+                    impact_scale = iteration / warmup_iters
+                    # Defense: 2 -> 1 (Higher defense during warmup to pull points to manifold)
+                    defense_scale = 2.0 - (iteration / warmup_iters)
+                else:
+                    impact_scale = 1.0
+                    defense_scale = 1.0
+                    
             total_attack_loss = 0.0
             total_defense_loss = 0.0  
             total_impact_loss = 0.0
@@ -253,14 +308,16 @@ class DSPOAttack(base_attack.Attack):
                 total_impact_loss /= batch_count
             
             # Compute total loss
-            total_loss = (-self.config.lambda_impact * total_impact_loss + 
+            total_loss = (-self.config.lambda_impact * total_impact_loss * impact_scale + 
                          self.config.lambda_stealth * total_attack_loss + 
-                         self.config.lambda_defense * total_defense_loss)
+                         self.config.lambda_defense * total_defense_loss * defense_scale)
             
             # Backpropagation
             total_loss.backward()
             optimizer.step()
-            scheduler.step()
+            
+            # Step scheduler with the metric
+            scheduler.step(total_loss)
             
             # Clamp perturbations
             with torch.no_grad():

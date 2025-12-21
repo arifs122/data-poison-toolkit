@@ -33,6 +33,7 @@ class ExperimentConfig:
 		"random": base_attack.BaseAttackConfig(),
 		"greedy_residue": base_attack.BaseAttackConfig(),
         "dspo": base_attack.DSPOConfig(),
+        "old_dspo": base_attack.DSPOConfig(),
 	})
 
 	active_defenses: List[str] = field(default_factory=lambda: ["lof", "pca", "kde", "forest", "median", "quantile", "dbscan"])
@@ -1078,7 +1079,8 @@ def _configure_attack_parameters_with_selection(df_clean: pd.DataFrame, config: 
     available_attacks = {
         'random': 'Random Attack (baseline)',
         'greedy_residue': 'Greedy Residue Attack', 
-        'dspo': 'DSPO Attack (sophisticated)'
+        'dspo': 'D-SPO Attack (sophisticated)',
+        'old_dspo': 'D-SPO Attack (Legacy)'
     }
     
     print("AVAILABLE ATTACKS:")
@@ -1330,10 +1332,10 @@ def _run_experiment_with_multiple_attacks(
                     task_type=dataset_config.task_type
                 )
                 
-            elif attack_name == 'dspo':
+            elif attack_name in ['dspo', 'old_dspo']:
                 # DSPO attack (mevcut kodu kullan)
                 attack_instance = base_attack.get_attack(
-                    "dspo", 
+                    attack_name, 
                     None,
                     df_clean, 
                     dataset_config.target_column, 

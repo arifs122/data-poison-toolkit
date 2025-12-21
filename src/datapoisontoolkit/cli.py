@@ -164,7 +164,7 @@ def run_attack_mode(args):
     console.print(f"  [dim]Target:[/dim] {config.target_column} [dim]({config.task_type})[/dim]")
     
     # Attack yapılandırması
-    selected_attacks = ['random', 'greedy_residue', 'dspo'] if args.type == 'all' else [args.type]
+    selected_attacks = ['random', 'greedy_residue', 'dspo', 'old_dspo'] if args.type == 'all' else [args.type]
     
     attack_config = {
         'selected_attacks': selected_attacks,
@@ -378,7 +378,8 @@ def list_components():
     attacks = {
         'random': 'Random baseline attack - random perturbations',
         'greedy_residue': 'Greedy attack targeting high-residue points',
-        'dspo': 'D-SPO attack - sophisticated optimization-based attack'
+        'dspo': 'D-SPO (Optimized) - Stealthy, efficient gradient attack',
+        'old_dspo': 'D-SPO (Legacy) - Original slower implementation'
     }
     for name, desc in attacks.items():
         attacks_table.add_row(name, desc)

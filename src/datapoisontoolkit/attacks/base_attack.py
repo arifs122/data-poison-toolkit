@@ -25,6 +25,14 @@ class DSPOConfig(BaseAttackConfig):
     lambda_defense: float = 0.1
     lambda_stealth: float = 0.05
     lambda_impact: float = 5.0
+    lambda_impact_mean: float = 5.0
+    lambda_impact_std: float = 4.0
+    lambda_impact_extremeness: float = 5.0
+    lambda_impact_skew: float = 3.0
+    lambda_impact_kurt: float = 2.0
+    lambda_impact_variance: float = 4.0
+    use_stealth_scheduler: bool = False
+    
     batch_size: Optional[int] = None  # New field for batch processing
     
     def update_from_interactive_config(self, interactive_config: Dict[str, any]):
@@ -43,8 +51,22 @@ class DSPOConfig(BaseAttackConfig):
             self.lambda_impact = interactive_config['lambda_impact']
         if 'lambda_stealth' in interactive_config:
             self.lambda_stealth = interactive_config['lambda_stealth']
-        if 'lambda_defense' in interactive_config:
-            self.lambda_defense = interactive_config['lambda_defense']
+        if 'lambda_impact_mean' in interactive_config:
+            self.lambda_impact_mean = interactive_config['lambda_impact_mean']
+        if 'lambda_impact_std' in interactive_config:
+            self.lambda_impact_std = interactive_config['lambda_impact_std']
+        if 'lambda_impact_extremeness' in interactive_config:
+            self.lambda_impact_extremeness = interactive_config['lambda_impact_extremeness']
+        if 'lambda_impact_skew' in interactive_config:
+            self.lambda_impact_skew = interactive_config['lambda_impact_skew']
+        if 'use_stealth_scheduler' in interactive_config:
+            self.use_stealth_scheduler = interactive_config['use_stealth_scheduler']
+        if 'lambda_impact_kurt' in interactive_config:
+            self.lambda_impact_kurt = interactive_config['lambda_impact_kurt']
+        if 'lambda_impact_variance' in interactive_config:
+            self.lambda_impact_variance = interactive_config['lambda_impact_variance']
+        if 'use_stealth_scheduler' in interactive_config:
+            self.use_stealth_scheduler = interactive_config['use_stealth_scheduler']
     
     @classmethod
     def from_interactive_config(cls, interactive_config: Dict[str, any]) -> 'DSPOConfig':
@@ -57,6 +79,12 @@ class DSPOConfig(BaseAttackConfig):
             lambda_defense=interactive_config.get('lambda_defense', 0.1),
             lambda_stealth=interactive_config.get('lambda_stealth', 0.05),
             lambda_impact=interactive_config.get('lambda_impact', 5.0),
+            lambda_impact_mean=interactive_config.get('lambda_impact_mean', 5.0),
+            lambda_impact_std=interactive_config.get('lambda_impact_std', 4.0),
+            lambda_impact_extremeness=interactive_config.get('lambda_impact_extremeness', 5.0),
+            lambda_impact_skew=interactive_config.get('lambda_impact_skew', 3.0),
+            lambda_impact_kurt=interactive_config.get('lambda_impact_kurt', 2.0),
+            lambda_impact_variance=interactive_config.get('lambda_impact_variance', 4.0),
             batch_size=interactive_config.get('batch_size', None)
         )
 
@@ -189,7 +217,7 @@ def get_attack(
         from datapoisontoolkit.attacks import greedy_residue_mock
         return greedy_residue_mock.GreedyResidueAttack(cfg, df, target_col, task_type)
     elif name == "dspo":
-        from datapoisontoolkit.attacks import dspo_improved
+        from datapoisontoolkit.attacks import dspo
         
         # Ensure we have DSPOConfig
         if not isinstance(cfg, DSPOConfig):
@@ -207,7 +235,22 @@ def get_attack(
                     lambda_impact=2.0
                 )
         
-        return dspo_improved.DSPOAttack(cfg, df, target_col, task_type, defenses)
+        return dspo.DSPOAttack(cfg, df, target_col, task_type, defenses)
+        
+    elif name == "old_dspo":
+        from datapoisontoolkit.attacks import old_dspo
+        
+        # Old dspo uses same config structure (mostly) but let's ensure it gets what it needs
+        if not isinstance(cfg, DSPOConfig):
+            if interactive_config:
+                cfg = DSPOConfig.from_interactive_config(interactive_config)
+            else:
+                 cfg = DSPOConfig(
+                    budget_pct=cfg.budget_pct,
+                    perturb_strength=cfg.perturb_strength
+                )
+        
+        return old_dspo.DSPOAttack(cfg, df, target_col, task_type, defenses)
     else:
         raise ValueError(f"Unknown attack: {name}")
 
