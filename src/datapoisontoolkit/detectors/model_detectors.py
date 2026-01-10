@@ -238,26 +238,38 @@ class DifferentiableDBSCAN(base_defense.DifferentiableDefense):
         self.beta = beta # Smoother gradient (was 5.0)
 
     def __call__(self, x: torch.Tensor) -> torch.Tensor:
-        # Soft neighbor count
-        pairwise_dist = torch.cdist(x, x)
+        # Cast to float32 to save memory
+        x = x.float()
         
-        # Soft threshold: sigmoid(beta * (eps - dist))
-        soft_neighbors = torch.sigmoid(self.beta * (self.eps - pairwise_dist)).sum(dim=1)
+        n_samples = x.shape[0]
+        # Batch size for distance computation to avoid OOM on large datasets
+        # 1000 rows x 60000 cols (float32) ~= 240MB, which is safe
+        batch_size = 1000 
+        scores_list = []
         
-        # Anomaly score is inverse of density. 
-        # Fix vanishing gradient: If density is very low (isolated),
-        # added a term that explicitly minimizes distance to nearest neighbors.
-        # This "pulls" the point towards the cluster even if sigmoid saturated.
-        
-        # Calculate distance to nearest 5 neighbors (approx)
-        k_nearest_dist, _ = torch.topk(pairwise_dist, k=min(10, x.shape[0]), dim=1, largest=False)
-        dist_penalty = k_nearest_dist.mean(dim=1)
-        
-        return -torch.log(soft_neighbors + 1e-6) + 0.5 * dist_penalty
+        for i in range(0, n_samples, batch_size):
+            x_batch = x[i:i + batch_size]
+            
+            # Compute distances for this batch against all points
+            # shape: [batch_size, n_samples]
+            dist_batch = torch.cdist(x_batch, x)
+            
+            # Soft threshold: sigmoid(beta * (eps - dist))
+            soft_neighbors_batch = torch.sigmoid(self.beta * (self.eps - dist_batch)).sum(dim=1)
+            
+            # Calculate distance to nearest neighbors (approx)
+            # We want topk smallest distances
+            k_nearest_dist, _ = torch.topk(dist_batch, k=min(10, n_samples), dim=1, largest=False)
+            dist_penalty_batch = k_nearest_dist.mean(dim=1)
+            
+            batch_scores = -torch.log(soft_neighbors_batch + 1e-6) + 0.5 * dist_penalty_batch
+            scores_list.append(batch_scores)
+            
+        return torch.cat(scores_list)
 
 class DBSCANDefense(base_defense.Defense):
     def detect(self, series: pd.Series) -> pd.Series:
-        X = series.values.reshape(-1, 1)
+        X = series.values.reshape(-1, 1).astype(np.float32)
         model = DBSCAN(eps=0.5, min_samples=10)
         labels = model.fit_predict(X)
         # Label -1: outlier

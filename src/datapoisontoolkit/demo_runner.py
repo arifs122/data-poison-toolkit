@@ -890,8 +890,10 @@ def save_results(df_results: pd.DataFrame, results_dir: Path, dataset_name: str,
     summary = df_results.groupby('attack')[available_columns].mean().reset_index()
     
     # Add parameter information to the summary table
+    # Add parameter information to the summary table
     summary_with_params = pd.DataFrame({
         'Dataset': [dataset_name] * len(summary),
+        'Attack': summary['attack'],
         'Budget (%)': [f"{budget_pct:.1%}"] * len(summary),
         'Perturb Strength': [perturb_strength] * len(summary),
         'Timestamp': [timestamp] * len(summary)
